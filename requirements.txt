@@ -1,0 +1,23 @@
+# Phase 2+ runtime dependencies. Pinned to known-good versions.
+# Update with: pip install -r requirements.txt --upgrade
+# Freeze with: pip freeze > requirements.lock.txt
+
+# HTTP client for all REST APIs (Subscribr, ElevenLabs, Resend, YouTube)
+requests>=2.32.0,<3
+
+# .env loader
+python-dotenv>=1.0.0,<2
+
+# Claude API + MCP (used in Stage 1 research)
+anthropic>=0.40.0
+
+# Word doc generation for Doc 1 / 2 / 3A / 3B
+python-docx>=1.1.0,<2
+
+# Resend email (we could also use raw requests, but the SDK is simple)
+resend>=2.0.0
+
+# YouTube upload (Phase 13)
+google-auth>=2.30.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.140.0
