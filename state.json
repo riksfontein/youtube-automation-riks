@@ -1,0 +1,70 @@
+{
+  "AE": {
+    "subscribr_channel_id": "56655",
+    "days": [1, 5],
+    "current_rotation": 1,
+    "videos_in_rotation": 0,
+    "rotation_threshold": 15,
+    "rotations": {
+      "1": "Ocean Monsters",
+      "2": "Extinction Forensics",
+      "3": "Ice Age Giants",
+      "4": "Geological Record",
+      "5": "Deep Weird"
+    },
+    "used_videos": [],
+    "reference_library": [
+      "ae-composite-apex-deep-ocean",
+      "ae-composite-apex-eocene-sea",
+      "ae-composite-megafauna-tundra",
+      "ae-composite-megafauna-fossil",
+      "ae-composite-terrestrial-strata"
+    ]
+  },
+  "GIA": {
+    "subscribr_channel_id": "54904",
+    "days": [2, 6],
+    "current_rotation": 1,
+    "videos_in_rotation": 0,
+    "rotation_threshold": 15,
+    "rotations": {
+      "1": "Strategic Geography",
+      "2": "Alliance Fractures",
+      "3": "Energy as Weapon",
+      "4": "Miscalculation Autopsies",
+      "5": "Theater Deep Analysis"
+    },
+    "used_videos": [],
+    "reference_library": [
+      "gia-composite-analyst-ops-room",
+      "gia-composite-analyst-corridor",
+      "gia-composite-analyst-field",
+      "gia-composite-powerfigure-corridor",
+      "gia-composite-powerfigure-ops-room",
+      "gia-composite-operator-field"
+    ]
+  },
+  "BF": {
+    "subscribr_channel_id": "55636",
+    "days": [3, 7],
+    "current_rotation": 1,
+    "videos_in_rotation": 0,
+    "rotation_threshold": 15,
+    "rotations": {
+      "1": "Nephilim Giants Archaeology",
+      "2": "Fallen Angels and Book of Enoch",
+      "3": "Giants and Smithsonian Cover-Up",
+      "4": "Solomon Temple Architecture",
+      "5": "Ancient Civilisations Corroboration"
+    },
+    "used_videos": [],
+    "reference_library": [
+      "bf-composite-researcher-desert",
+      "bf-composite-researcher-temple",
+      "bf-composite-prophet-desert",
+      "bf-composite-nephilim-desert",
+      "bf-composite-highpriest-temple",
+      "bf-composite-fallen-cave"
+    ]
+  }
+}

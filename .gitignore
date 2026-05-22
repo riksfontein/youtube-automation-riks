@@ -1,0 +1,59 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+client_secrets.json
+*.pem
+*.key
+
+# Briefing & derived artifacts (contains live API keys in plaintext)
+ClaudeCode_Master_Briefing_v1.docx
+_briefing_unpacked/
+briefing_extracted.txt
+briefing_extracted.md
+
+# Claude Code per-user state
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local production output (lives in Google Drive, not the repo)
+Production/
+*.mp4
+*.wav
+*.mp3
+*.srt
+narration_padded.wav
+captions.srt
+music.mp3
+
+# Tokens / OAuth cache
+token.json
+.youtube_credentials.json
