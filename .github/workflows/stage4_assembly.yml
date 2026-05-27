@@ -68,10 +68,14 @@ jobs:
           DRIVE_FOLDER_URL: ${{ github.event.inputs.drive_folder_url }}
         run: python src/main.py --stage 4 --channel $CHANNEL --job-id $JOB_ID --drive-folder "$DRIVE_FOLDER_URL"
 
+
+      - name: Generate dashboard
+        run: python src/generate_dashboard.py
+        continue-on-error: true
       - name: Commit state updates
         run: |
           git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
-          git add state.json
+          git add state.json docs/index.html
           git diff --staged --quiet || git commit -m "Stage 4 complete: ${{ github.event.inputs.channel }} uploaded"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_PAT }}@github.com/${{ github.repository }}.git HEAD:main
