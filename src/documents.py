@@ -474,8 +474,26 @@ def build_all_documents(
 
     print(f"\n[Documents] Building all 5 documents for: {video_title}")
 
-    # Generate scene data with all prompts
+    # Generate scene data — base prompts first
     scenes = generate_scenes(script_text, channel, scene_timings)
+
+    # Enhance video prompts using storyboard skill (Phase 2)
+    # This ensures cinematically coherent shot variety and three-act arc
+    print("[Documents] Enhancing video prompts with storyboard skill...")
+    try:
+        from src.storyboard import generate_scene_video_prompts, generate_storyboard_sheet_prompt
+        scenes = generate_scene_video_prompts(scenes, channel, script_text, video_title)
+
+        # Generate Phase 1 storyboard sheet prompt
+        storyboard_sheet = generate_storyboard_sheet_prompt(
+            script_text, channel, scene_timings, video_title
+        )
+        if storyboard_sheet:
+            sheet_path = output_dir / "Doc0_Storyboard_Sheet_Prompt.txt"
+            sheet_path.write_text(storyboard_sheet, encoding="utf-8")
+            print(f"[Documents] Storyboard sheet prompt saved: {sheet_path}")
+    except Exception as e:
+        print(f"[Documents] Storyboard enhancement skipped: {e}")
 
     # Build all 5 documents
     doc1_path = build_doc1(scenes, channel, video_title, output_dir)
