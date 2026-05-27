@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_PAT }}
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
