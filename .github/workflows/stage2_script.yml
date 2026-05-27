@@ -1,0 +1,63 @@
+name: Stage 2 — Script Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Channel (AE, GIA, or BF)'
+        required: true
+        type: choice
+        options: [AE, GIA, BF]
+      selected_video_url:
+        description: 'Selected competitor video URL from Checkpoint 1 email'
+        required: true
+      selected_video_title:
+        description: 'Title of selected competitor video'
+        required: true
+      job_id:
+        description: 'Job ID from Checkpoint 1 email'
+        required: true
+
+jobs:
+  generate_script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Stage 2 Script Generation
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          SUBSCRIBR_API_KEY: ${{ secrets.SUBSCRIBR_API_KEY }}
+          VIDIQ_API_KEY: ${{ secrets.VIDIQ_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_MAIN }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_REPO: ${{ github.repository }}
+          CHANNEL: ${{ github.event.inputs.channel }}
+          SELECTED_VIDEO_URL: ${{ github.event.inputs.selected_video_url }}
+          SELECTED_VIDEO_TITLE: ${{ github.event.inputs.selected_video_title }}
+          JOB_ID: ${{ github.event.inputs.job_id }}
+        run: python src/main.py --stage 2 --channel $CHANNEL --video-url "$SELECTED_VIDEO_URL" --video-title "$SELECTED_VIDEO_TITLE" --job-id $JOB_ID
+
+      - name: Commit state updates
+        run: |
+          git config --global user.email "automation@riksfontein.com"
+          git config --global user.name "YouTube Automation"
+          git add state.json
+          git diff --staged --quiet || git commit -m "Stage 2 complete: ${{ github.event.inputs.channel }} script generated"
+          git push
