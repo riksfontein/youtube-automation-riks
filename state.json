@@ -1,10 +1,17 @@
 {
   "AE": {
+    "channel_name": "Ancient Earth Cinema",
     "subscribr_channel_id": "56655",
-    "days": [1, 5],
+    "youtube_channel_name": "Ancient Earth Cinema",
+    "voice_id": "KrLSOqTJ03d0YgQo3vIB",
+    "caption_font": "Bebas Neue",
+    "caption_uppercase": true,
     "current_rotation": 1,
+    "rotation_name": "Ocean Monsters",
     "videos_in_rotation": 0,
     "rotation_threshold": 15,
+    "total_videos_published": 0,
+    "used_competitor_video_ids": [],
     "rotations": {
       "1": "Ocean Monsters",
       "2": "Extinction Forensics",
@@ -12,21 +19,47 @@
       "4": "Geological Record",
       "5": "Deep Weird"
     },
-    "used_videos": [],
-    "reference_library": [
-      "ae-composite-apex-deep-ocean",
-      "ae-composite-apex-eocene-sea",
-      "ae-composite-megafauna-tundra",
-      "ae-composite-megafauna-fossil",
-      "ae-composite-terrestrial-strata"
-    ]
+    "keywords_by_rotation": {
+      "1": ["megalodon", "prehistoric ocean monster", "ancient sea predator", "ocean monsters extinct", "megalodon shark prehistoric"],
+      "2": ["mass extinction event", "dinosaur extinction K-Pg", "prehistoric extinction forensics", "asteroid impact extinction", "chicxulub extinction"],
+      "3": ["woolly mammoth ice age", "ice age giants prehistoric", "pleistocene megafauna extinct", "saber tooth cat extinct", "woolly rhinoceros extinct"],
+      "4": ["fossil record discovery", "prehistoric fossil found", "paleontology discovery ancient", "geological record prehistoric", "fossil site discovery"],
+      "5": ["weird prehistoric creatures", "cambrian explosion strange", "ancient deep sea creature", "bizarre extinct animal", "strange prehistoric animal nobody talks about"]
+    },
+    "reference_library": {
+      "ae-composite-apex-deep-ocean": "",
+      "ae-composite-apex-eocene-sea": "",
+      "ae-composite-megafauna-tundra": "",
+      "ae-composite-megafauna-fossil": "",
+      "ae-composite-terrestrial-strata": "",
+      "ae-megalodon-gpt2-ref-1": "",
+      "ae-mammoth-gpt2-ref-1": "",
+      "ae-trex-gpt2-ref-1": "",
+      "ae-mosasaur-gpt2-ref-1": "",
+      "ae-sabertooth-gpt2-ref-1": "",
+      "ae-map-megalodon-range": "",
+      "ae-map-chicxulub-impact": "",
+      "ae-map-pleistocene-megafauna": "",
+      "ae-map-fossil-sites": "",
+      "ae-map-cambrian-world": ""
+    },
+    "google_drive_base_path": "YouTube-Automation/AE",
+    "schedule_days": [0, 4],
+    "youtube_category_id": "28"
   },
   "GIA": {
+    "channel_name": "The Global Intel Analyst",
     "subscribr_channel_id": "54904",
-    "days": [2, 6],
+    "youtube_channel_name": "The Global Intel Analyst",
+    "voice_id": "qJzxuHiXzwNfK93oCbAL",
+    "caption_font": "Bebas Neue",
+    "caption_uppercase": true,
     "current_rotation": 1,
+    "rotation_name": "Strategic Geography",
     "videos_in_rotation": 0,
     "rotation_threshold": 15,
+    "total_videos_published": 0,
+    "used_competitor_video_ids": [],
     "rotations": {
       "1": "Strategic Geography",
       "2": "Alliance Fractures",
@@ -34,37 +67,84 @@
       "4": "Miscalculation Autopsies",
       "5": "Theater Deep Analysis"
     },
-    "used_videos": [],
-    "reference_library": [
-      "gia-composite-analyst-ops-room",
-      "gia-composite-analyst-corridor",
-      "gia-composite-analyst-field",
-      "gia-composite-powerfigure-corridor",
-      "gia-composite-powerfigure-ops-room",
-      "gia-composite-operator-field"
-    ]
+    "keywords_by_rotation": {
+      "1": ["strait of hormuz geopolitics", "south china sea conflict", "strategic chokepoints world", "maritime strategy geopolitics", "taiwan strait military"],
+      "2": ["NATO eastern flank vulnerability", "alliance fractures geopolitics", "US China alliance collapse", "geopolitical alliance breakdown", "military alliance intelligence"],
+      "3": ["energy weapon geopolitics", "gas pipeline warfare", "oil sanctions strategy", "energy coercion geopolitics", "Russia energy weapon Europe"],
+      "4": ["military miscalculation history", "war by accident geopolitics", "escalation miscalculation intelligence", "nuclear close call history", "geopolitical miscalculation analysis"],
+      "5": ["Ukraine war theater analysis", "Taiwan military conflict analysis", "Red Sea Houthi attacks analysis", "Middle East conflict intelligence", "military theater deep analysis"]
+    },
+    "reference_library": {
+      "gia-composite-analyst-ops-room": "",
+      "gia-composite-analyst-corridor": "",
+      "gia-composite-analyst-field": "",
+      "gia-composite-powerfigure-corridor": "",
+      "gia-composite-powerfigure-ops-room": "",
+      "gia-composite-operator-field": "",
+      "gia-map-hormuz": "",
+      "gia-map-chokepoints": "",
+      "gia-map-south-china-sea": "",
+      "gia-map-nato-eastern-flank": "",
+      "gia-map-indo-pacific-alliances": "",
+      "gia-map-middle-east-power": "",
+      "gia-map-europe-gas-pipelines": "",
+      "gia-map-lng-trade-routes": "",
+      "gia-map-critical-minerals": "",
+      "gia-map-miscalculation-zones": "",
+      "gia-map-nuclear-tripwires": "",
+      "gia-map-ukraine-theater": "",
+      "gia-map-taiwan-theater": "",
+      "gia-map-red-sea-theater": ""
+    },
+    "google_drive_base_path": "YouTube-Automation/GIA",
+    "schedule_days": [1, 5],
+    "youtube_category_id": "25"
   },
   "BF": {
+    "channel_name": "The AI Bible Forensic",
     "subscribr_channel_id": "55636",
-    "days": [3, 7],
+    "youtube_channel_name": "The AI Bible Forensic",
+    "voice_id": "fTxPU0W4ttEaGNurH5cf",
+    "caption_font": "Cinzel",
+    "caption_uppercase": false,
     "current_rotation": 1,
+    "rotation_name": "Nephilim Giants Archaeology",
     "videos_in_rotation": 0,
     "rotation_threshold": 15,
+    "total_videos_published": 0,
+    "used_competitor_video_ids": [],
     "rotations": {
       "1": "Nephilim Giants Archaeology",
-      "2": "Fallen Angels and Book of Enoch",
-      "3": "Giants and Smithsonian Cover-Up",
+      "2": "Fallen Angels Enoch",
+      "3": "Giants Smithsonian Cover-Up",
       "4": "Solomon Temple Architecture",
-      "5": "Ancient Civilisations Corroboration"
+      "5": "Ancient Civilisations"
     },
-    "used_videos": [],
-    "reference_library": [
-      "bf-composite-researcher-desert",
-      "bf-composite-researcher-temple",
-      "bf-composite-prophet-desert",
-      "bf-composite-nephilim-desert",
-      "bf-composite-highpriest-temple",
-      "bf-composite-fallen-cave"
-    ]
-  }
+    "keywords_by_rotation": {
+      "1": ["nephilim giants archaeology evidence", "giant skeletons discovered hidden", "biblical giants real evidence", "nephilim bones found suppressed", "giant humans ancient archaeology"],
+      "2": ["book of enoch fallen angels", "fallen angels watchers ancient", "enoch scrolls hidden truth", "watchers nephilim book of enoch", "fallen angels biblical evidence"],
+      "3": ["smithsonian giant cover up", "giants smithsonian suppressed evidence", "giant skeletons smithsonian hidden", "smithsonian conspiracy giants bones", "giant bones disappeared smithsonian"],
+      "4": ["solomon temple real evidence", "temple mount archaeology discovery", "ark of covenant real", "solomon temple hidden truth", "holy of holies temple archaeology"],
+      "5": ["ancient civilisations biblical proof", "gobekli tepe changes everything", "ancient sites corroborate bible", "baalbek ancient mystery evidence", "ancient civilisation biblical archaeology"]
+    },
+    "reference_library": {
+      "bf-composite-researcher-desert": "",
+      "bf-composite-researcher-temple": "",
+      "bf-composite-prophet-desert": "",
+      "bf-composite-nephilim-desert": "",
+      "bf-composite-highpriest-temple": "",
+      "bf-composite-fallen-cave": "",
+      "bf-map-giant-discoveries": "",
+      "bf-map-ancient-near-east": "",
+      "bf-map-temple-mount": "",
+      "bf-map-ancient-sites-world": "",
+      "bf-map-enoch-geography": "",
+      "bf-map-smithsonian-campus": ""
+    },
+    "google_drive_base_path": "YouTube-Automation/BF",
+    "schedule_days": [2, 6],
+    "youtube_category_id": "27"
+  },
+  "last_updated": "",
+  "pending_jobs": {}
 }
