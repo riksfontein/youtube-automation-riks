@@ -62,10 +62,14 @@ jobs:
           ACTION: ${{ github.event.inputs.action }}
         run: python src/main.py --stage 3 --channel $CHANNEL --job-id $JOB_ID --action $ACTION
 
+
+      - name: Generate dashboard
+        run: python src/generate_dashboard.py
+        continue-on-error: true
       - name: Commit state updates
         run: |
           git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
-          git add state.json
+          git add state.json docs/index.html
           git diff --staged --quiet || git commit -m "Stage 3 complete: ${{ github.event.inputs.channel }} documents"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_PAT }}@github.com/${{ github.repository }}.git HEAD:main
