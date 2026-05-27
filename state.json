@@ -20,11 +20,41 @@
       "5": "Deep Weird"
     },
     "keywords_by_rotation": {
-      "1": ["megalodon", "prehistoric ocean monster", "ancient sea predator", "ocean monsters extinct", "megalodon shark prehistoric"],
-      "2": ["mass extinction event", "dinosaur extinction K-Pg", "prehistoric extinction forensics", "asteroid impact extinction", "chicxulub extinction"],
-      "3": ["woolly mammoth ice age", "ice age giants prehistoric", "pleistocene megafauna extinct", "saber tooth cat extinct", "woolly rhinoceros extinct"],
-      "4": ["fossil record discovery", "prehistoric fossil found", "paleontology discovery ancient", "geological record prehistoric", "fossil site discovery"],
-      "5": ["weird prehistoric creatures", "cambrian explosion strange", "ancient deep sea creature", "bizarre extinct animal", "strange prehistoric animal nobody talks about"]
+      "1": [
+        "megalodon",
+        "prehistoric ocean monster",
+        "ancient sea predator",
+        "ocean monsters extinct",
+        "megalodon shark prehistoric"
+      ],
+      "2": [
+        "mass extinction event",
+        "dinosaur extinction K-Pg",
+        "prehistoric extinction forensics",
+        "asteroid impact extinction",
+        "chicxulub extinction"
+      ],
+      "3": [
+        "woolly mammoth ice age",
+        "ice age giants prehistoric",
+        "pleistocene megafauna extinct",
+        "saber tooth cat extinct",
+        "woolly rhinoceros extinct"
+      ],
+      "4": [
+        "fossil record discovery",
+        "prehistoric fossil found",
+        "paleontology discovery ancient",
+        "geological record prehistoric",
+        "fossil site discovery"
+      ],
+      "5": [
+        "weird prehistoric creatures",
+        "cambrian explosion strange",
+        "ancient deep sea creature",
+        "bizarre extinct animal",
+        "strange prehistoric animal nobody talks about"
+      ]
     },
     "reference_library": {
       "ae-composite-apex-deep-ocean": "",
@@ -44,8 +74,12 @@
       "ae-map-cambrian-world": ""
     },
     "google_drive_base_path": "YouTube-Automation/AE",
-    "schedule_days": [0, 4],
-    "youtube_category_id": "28"
+    "schedule_days": [
+      0,
+      4
+    ],
+    "youtube_category_id": "28",
+    "youtube_channel_id": "UCzazMPj4dWuXuLj74aVu9WQ"
   },
   "GIA": {
     "channel_name": "The Global Intel Analyst",
@@ -68,11 +102,41 @@
       "5": "Theater Deep Analysis"
     },
     "keywords_by_rotation": {
-      "1": ["strait of hormuz geopolitics", "south china sea conflict", "strategic chokepoints world", "maritime strategy geopolitics", "taiwan strait military"],
-      "2": ["NATO eastern flank vulnerability", "alliance fractures geopolitics", "US China alliance collapse", "geopolitical alliance breakdown", "military alliance intelligence"],
-      "3": ["energy weapon geopolitics", "gas pipeline warfare", "oil sanctions strategy", "energy coercion geopolitics", "Russia energy weapon Europe"],
-      "4": ["military miscalculation history", "war by accident geopolitics", "escalation miscalculation intelligence", "nuclear close call history", "geopolitical miscalculation analysis"],
-      "5": ["Ukraine war theater analysis", "Taiwan military conflict analysis", "Red Sea Houthi attacks analysis", "Middle East conflict intelligence", "military theater deep analysis"]
+      "1": [
+        "strait of hormuz geopolitics",
+        "south china sea conflict",
+        "strategic chokepoints world",
+        "maritime strategy geopolitics",
+        "taiwan strait military"
+      ],
+      "2": [
+        "NATO eastern flank vulnerability",
+        "alliance fractures geopolitics",
+        "US China alliance collapse",
+        "geopolitical alliance breakdown",
+        "military alliance intelligence"
+      ],
+      "3": [
+        "energy weapon geopolitics",
+        "gas pipeline warfare",
+        "oil sanctions strategy",
+        "energy coercion geopolitics",
+        "Russia energy weapon Europe"
+      ],
+      "4": [
+        "military miscalculation history",
+        "war by accident geopolitics",
+        "escalation miscalculation intelligence",
+        "nuclear close call history",
+        "geopolitical miscalculation analysis"
+      ],
+      "5": [
+        "Ukraine war theater analysis",
+        "Taiwan military conflict analysis",
+        "Red Sea Houthi attacks analysis",
+        "Middle East conflict intelligence",
+        "military theater deep analysis"
+      ]
     },
     "reference_library": {
       "gia-composite-analyst-ops-room": "",
@@ -97,8 +161,12 @@
       "gia-map-red-sea-theater": ""
     },
     "google_drive_base_path": "YouTube-Automation/GIA",
-    "schedule_days": [1, 5],
-    "youtube_category_id": "25"
+    "schedule_days": [
+      1,
+      5
+    ],
+    "youtube_category_id": "25",
+    "youtube_channel_id": "UCrNSYDPBcQRNzpJlA3hEXnA"
   },
   "BF": {
     "channel_name": "The AI Bible Forensic",
@@ -121,11 +189,41 @@
       "5": "Ancient Civilisations"
     },
     "keywords_by_rotation": {
-      "1": ["nephilim giants archaeology evidence", "giant skeletons discovered hidden", "biblical giants real evidence", "nephilim bones found suppressed", "giant humans ancient archaeology"],
-      "2": ["book of enoch fallen angels", "fallen angels watchers ancient", "enoch scrolls hidden truth", "watchers nephilim book of enoch", "fallen angels biblical evidence"],
-      "3": ["smithsonian giant cover up", "giants smithsonian suppressed evidence", "giant skeletons smithsonian hidden", "smithsonian conspiracy giants bones", "giant bones disappeared smithsonian"],
-      "4": ["solomon temple real evidence", "temple mount archaeology discovery", "ark of covenant real", "solomon temple hidden truth", "holy of holies temple archaeology"],
-      "5": ["ancient civilisations biblical proof", "gobekli tepe changes everything", "ancient sites corroborate bible", "baalbek ancient mystery evidence", "ancient civilisation biblical archaeology"]
+      "1": [
+        "nephilim giants archaeology evidence",
+        "giant skeletons discovered hidden",
+        "biblical giants real evidence",
+        "nephilim bones found suppressed",
+        "giant humans ancient archaeology"
+      ],
+      "2": [
+        "book of enoch fallen angels",
+        "fallen angels watchers ancient",
+        "enoch scrolls hidden truth",
+        "watchers nephilim book of enoch",
+        "fallen angels biblical evidence"
+      ],
+      "3": [
+        "smithsonian giant cover up",
+        "giants smithsonian suppressed evidence",
+        "giant skeletons smithsonian hidden",
+        "smithsonian conspiracy giants bones",
+        "giant bones disappeared smithsonian"
+      ],
+      "4": [
+        "solomon temple real evidence",
+        "temple mount archaeology discovery",
+        "ark of covenant real",
+        "solomon temple hidden truth",
+        "holy of holies temple archaeology"
+      ],
+      "5": [
+        "ancient civilisations biblical proof",
+        "gobekli tepe changes everything",
+        "ancient sites corroborate bible",
+        "baalbek ancient mystery evidence",
+        "ancient civilisation biblical archaeology"
+      ]
     },
     "reference_library": {
       "bf-composite-researcher-desert": "",
@@ -142,8 +240,12 @@
       "bf-map-smithsonian-campus": ""
     },
     "google_drive_base_path": "YouTube-Automation/BF",
-    "schedule_days": [2, 6],
-    "youtube_category_id": "27"
+    "schedule_days": [
+      2,
+      6
+    ],
+    "youtube_category_id": "27",
+    "youtube_channel_id": "UCvFKEzLIek3v05fqvAQbudA"
   },
   "last_updated": "",
   "pending_jobs": {}
