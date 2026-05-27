@@ -54,10 +54,14 @@ jobs:
           JOB_ID: ${{ github.event.inputs.job_id }}
         run: python src/main.py --stage 2 --channel $CHANNEL --video-url "$SELECTED_VIDEO_URL" --video-title "$SELECTED_VIDEO_TITLE" --job-id $JOB_ID
 
+
+      - name: Generate dashboard
+        run: python src/generate_dashboard.py
+        continue-on-error: true
       - name: Commit state updates
         run: |
           git config --global user.email "automation@riksfontein.com"
           git config --global user.name "YouTube Automation"
-          git add state.json
+          git add state.json docs/index.html
           git diff --staged --quiet || git commit -m "Stage 2 complete: ${{ github.event.inputs.channel }} script generated"
-          git push
+          git push https://x-access-token:${{ secrets.GITHUB_PAT }}@github.com/${{ github.repository }}.git HEAD:main
