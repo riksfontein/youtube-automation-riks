@@ -1,0 +1,91 @@
+name: Stage 1 — Research & Competitor Selection
+
+on:
+  schedule:
+    # Monday 06:00 UTC = AE
+    - cron: '0 6 * * 1'
+    # Tuesday 06:00 UTC = GIA
+    - cron: '0 6 * * 2'
+    # Wednesday 06:00 UTC = BF
+    - cron: '0 6 * * 3'
+    # Friday 06:00 UTC = AE
+    - cron: '0 6 * * 5'
+    # Saturday 06:00 UTC = GIA
+    - cron: '0 6 * * 6'
+    # Sunday 06:00 UTC = BF
+    - cron: '0 6 * * 0'
+
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Channel to run (AE, GIA, or BF)'
+        required: true
+        default: 'AE'
+        type: choice
+        options:
+          - AE
+          - GIA
+          - BF
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine channel from schedule
+        id: channel
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "channel=${{ github.event.inputs.channel }}" >> $GITHUB_OUTPUT
+          else
+            DAY=$(date +%u)
+            # 1=Monday(AE), 2=Tuesday(GIA), 3=Wednesday(BF)
+            # 5=Friday(AE), 6=Saturday(GIA), 7=Sunday(BF)
+            case $DAY in
+              1|5) echo "channel=AE" >> $GITHUB_OUTPUT ;;
+              2|6) echo "channel=GIA" >> $GITHUB_OUTPUT ;;
+              3|7) echo "channel=BF" >> $GITHUB_OUTPUT ;;
+              *) echo "channel=AE" >> $GITHUB_OUTPUT ;;
+            esac
+          fi
+
+      - name: Run Stage 1 Research
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          SUBSCRIBR_API_KEY: ${{ secrets.SUBSCRIBR_API_KEY }}
+          VIDIQ_API_KEY: ${{ secrets.VIDIQ_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_MAIN }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_REPO: ${{ github.repository }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+        run: python src/main.py --stage 1 --channel $CHANNEL
+
+      - name: Commit state updates
+        run: |
+          git config --global user.email "automation@riksfontein.com"
+          git config --global user.name "YouTube Automation"
+          git add state.json
+          git diff --staged --quiet || git commit -m "Stage 1 complete: ${{ steps.channel.outputs.channel }} research"
+          git push
+
+# Note: Add these additional secrets to GitHub Actions:
+# ELEVENLABS_VOICE_ID_AE, ELEVENLABS_VOICE_ID_GIA, ELEVENLABS_VOICE_ID_BF
+# SUBSCRIBR_CHANNEL_ID_AE, SUBSCRIBR_CHANNEL_ID_GIA, SUBSCRIBR_CHANNEL_ID_BF
+# RESEND_FROM_EMAIL, RESEND_TO_EMAIL
