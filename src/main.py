@@ -436,6 +436,22 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
 
     # Mark job complete (increments rotation counter)
     complete_job(job_id, channel)
+
+    # Record video in memory system for performance tracking
+    try:
+        from src.memory import record_produced_video
+        record_produced_video(
+            channel=channel,
+            youtube_video_id=yt_result["video_id"],
+            competitor_channel_name=data.get("competitor_channel_name", ""),
+            competitor_video_url=data.get("competitor_video_url", ""),
+            angle=data.get("subscribr_angle", ""),
+            format_type=data.get("subscribr_format", "Documentary"),
+            rotation_name=ch_state["rotation_name"],
+            title=video_title
+        )
+    except Exception as e:
+        print(f"[Main] Memory recording skipped: {e}")
     ch_state = get_channel_state(channel)  # reload updated state
 
     # Send delivery email
