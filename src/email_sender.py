@@ -16,8 +16,8 @@ from datetime import datetime
 from typing import Optional
 
 RESEND_API_KEY   = os.environ["RESEND_API_KEY"]
-FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "automation@croki.store")
-TO_EMAIL   = os.environ.get("RESEND_TO_EMAIL", "info@croki.store")
+FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL") or "automation@croki.store"
+TO_EMAIL   = os.environ.get("RESEND_TO_EMAIL") or "info@croki.store" 
 RESEND_SEND_URL  = "https://api.resend.com/emails"
 
 GITHUB_REPO    = os.environ.get("GITHUB_REPO", "riksfontein/youtube-automation")
@@ -26,26 +26,42 @@ GITHUB_ACTIONS = f"https://github.com/{GITHUB_REPO}/actions"
 
 def _send(subject: str, html: str,
           attachments: Optional[list[dict]] = None) -> dict:
-    """Send an email via Resend API."""
+    """Send an email via Resend API. Never raises — logs error and continues."""
+    from_email = os.environ.get("RESEND_FROM_EMAIL") or "automation@croki.store"
+    to_email   = os.environ.get("RESEND_TO_EMAIL")   or "info@croki.store"
+    api_key    = os.environ.get("RESEND_API_KEY", "")
+
     payload = {
-        "from":    FROM_EMAIL,
-        "to":      [TO_EMAIL],
+        "from":    from_email,
+        "to":      [to_email],
         "subject": subject,
         "html":    html
     }
     if attachments:
         payload["attachments"] = attachments
 
-    headers = {
-        "Authorization": f"Bearer {RESEND_API_KEY}",
-        "Content-Type":  "application/json"
-    }
+    if not api_key:
+        print(f"[Email] SKIPPED (no RESEND_API_KEY): {subject[:60]}")
+        return {"skipped": "no api key"}
 
-    resp = requests.post(RESEND_SEND_URL, headers=headers, json=payload, timeout=30)
-    resp.raise_for_status()
-    result = resp.json()
-    print(f"[Email] Sent: {subject[:60]} → {result.get('id', 'ok')}")
-    return result
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json"
+        }
+        resp = requests.post(RESEND_SEND_URL, headers=headers, json=payload, timeout=30)
+        if resp.status_code == 422:
+            print(f"[Email] 422 error — check FROM domain is verified in Resend")
+            print(f"[Email] From: {from_email} | To: {to_email}")
+            print(f"[Email] Response: {resp.text[:300]}")
+            return {"error": "422", "details": resp.text}
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"[Email] Sent: {subject[:60]} → {result.get('id', 'ok')}")
+        return result
+    except Exception as e:
+        print(f"[Email] Failed to send '{subject[:40]}': {e}")
+        return {"error": str(e)}
 
 
 def _video_card(video: dict, index: int, job_id: str, channel: str) -> str:
@@ -236,20 +252,68 @@ def send_reference_images(
     channel: str,
     job_id: str,
     video_title: str,
-    missing_refs: list[dict]
+    missing_refs: list,
+    new_characters: list = None
 ) -> dict:
-    """Send Email B — missing reference images notification."""
+    """Send Email B — missing reference images + new character sheet notifications."""
     channel_names = {"AE": "Ancient Earth Cinema", "GIA": "The Global Intel Analyst", "BF": "The AI Bible Forensic"}
     ch_name = channel_names.get(channel, channel)
 
-    covered_count = 0  # not sent in this email
     missing_count = len(missing_refs)
+    new_char_count = len(new_characters or [])
 
-    if missing_count == 0:
+    if missing_count == 0 and new_char_count == 0:
         return {"skipped": "no missing references"}
 
+    # New character section
+    new_char_html = ""
+    if new_characters:
+        new_char_html = f"""
+<div style="background:#1e1b4b;border-radius:8px;padding:16px;margin-bottom:20px">
+  <div style="color:#a5b4fc;font-size:13px;font-weight:bold;margin-bottom:12px">
+    ⚡ {new_char_count} NEW CHARACTER{'S' if new_char_count > 1 else ''} DETECTED
+  </div>
+  <p style="color:#c7d2fe;font-size:12px;margin-bottom:12px">
+    These characters appear in this video but have no reference sheet yet.
+    Generate the 4-view character sheet FIRST, then the composite reference.
+    After uploading both, the storyboard prompts for affected scenes will update automatically.
+  </p>"""
+
+        for char in new_characters:
+            name       = char.get("name", "")
+            scenes     = char.get("scenes_featuring", [])
+            sheet_prompt  = char.get("character_sheet_prompt", "")
+            sheet_file    = char.get("filename", "")
+            comp_prompt   = char.get("composite_prompt", "")
+            comp_file     = char.get("composite_filename", "")
+
+            new_char_html += f"""
+  <div style="border:1px solid #4338ca;border-radius:6px;padding:14px;margin:10px 0;background:#0f0e24">
+    <div style="color:#818cf8;font-size:12px;font-weight:bold;margin-bottom:6px">
+      NEW: {name.upper()} — appears in scenes {', '.join(str(s) for s in scenes[:8])}{'...' if len(scenes) > 8 else ''}
+    </div>
+    <div style="color:#a5b4fc;font-size:11px;font-weight:bold;margin:10px 0 4px">
+      STEP 1 — Generate 4-view character reference sheet:
+    </div>
+    <div style="font-size:11px;color:#6366f1;margin-bottom:4px">Save as: <code style="color:#818cf8">{sheet_file}</code></div>
+    <div style="background:#1e1b4b;border-radius:4px;padding:10px;margin:6px 0;color:#c7d2fe;font-size:10px;font-family:monospace;white-space:pre-wrap;word-break:break-word">{sheet_prompt[:600]}{'...' if len(sheet_prompt) > 600 else ''}</div>
+    <div style="color:#a5b4fc;font-size:11px;font-weight:bold;margin:10px 0 4px">
+      STEP 2 — Generate scene composite reference:
+    </div>
+    <div style="font-size:11px;color:#6366f1;margin-bottom:4px">Save as: <code style="color:#818cf8">{comp_file}</code></div>
+    <div style="background:#1e1b4b;border-radius:4px;padding:10px;margin:6px 0;color:#c7d2fe;font-size:10px;font-family:monospace;white-space:pre-wrap;word-break:break-word">{comp_prompt[:400]}{'...' if len(comp_prompt) > 400 else ''}</div>
+    <div style="color:#6ee7b7;font-size:11px;margin-top:8px">
+      ✓ After uploading both images, the storyboard prompts for {len(scenes)} scene{'s' if len(scenes) > 1 else ''} will update automatically.
+    </div>
+  </div>"""
+
+        new_char_html += "</div>"
+
+    # Standard missing refs section
     ref_cards = ""
     for ref in missing_refs:
+        if ref.get("is_new_character"):
+            continue  # already shown in new character section
         scene_num  = ref.get("scene_number", "?")
         scene_text = ref.get("scene_text", "")[:80]
         ref_id     = ref.get("reference_id", "")
@@ -259,20 +323,20 @@ def send_reference_images(
 
         ref_cards += f"""
 <div style="border:1px solid #fcd34d;border-radius:8px;padding:16px;margin:12px 0;background:#fffbeb">
-  <div style="font-size:11px;color:#92400e;font-weight:bold">SCENE {scene_num} — MISSING</div>
+  <div style="font-size:11px;color:#92400e;font-weight:bold">SCENE {scene_num} — MISSING REFERENCE</div>
   <div style="font-size:13px;color:#555;margin:4px 0 8px">{scene_text}...</div>
   <div style="font-size:12px;margin-bottom:6px">
     <strong>Save as:</strong> <code>{filename}</code><br>
     <strong>Upload to:</strong> {upload_to} / Google Drive
   </div>
   <div style="background:#1e1b4b;border-radius:4px;padding:12px;margin-top:8px">
-    <div style="color:#a5b4fc;font-size:10px;margin-bottom:6px">GPT Image 2 prompt — copy and paste:</div>
-    <div style="color:#e0e7ff;font-size:11px;font-family:monospace;line-height:1.5;
-                white-space:pre-wrap;word-break:break-word">{prompt}</div>
+    <div style="color:#a5b4fc;font-size:10px;margin-bottom:6px">GPT Image 2 prompt:</div>
+    <div style="color:#e0e7ff;font-size:11px;font-family:monospace;white-space:pre-wrap;word-break:break-word">{prompt[:500]}{'...' if len(prompt) > 500 else ''}</div>
   </div>
 </div>"""
 
-    subject = f"{channel} — {missing_count} Reference Images Needed | {video_title[:40]}"
+    total_count = missing_count + new_char_count
+    subject = f"{channel} — {total_count} Reference Image{'s' if total_count > 1 else ''} Needed | {video_title[:40]}"
 
     html = f"""
 <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
@@ -280,19 +344,13 @@ def send_reference_images(
     <div style="color:#fff;font-size:20px;font-weight:bold">{ch_name}</div>
     <div style="color:#fde68a;font-size:14px">Reference Images Needed Before Production</div>
   </div>
-
   <div style="padding:24px">
-    <p><strong>{missing_count} reference image{'' if missing_count==1 else 's'} need{'' if missing_count>1 else 's'} to be generated</strong> 
-    before images can be created for this video.</p>
-    <p style="color:#666">Generate each image using <strong>GPT Image 2 with thinking mode enabled</strong>. 
-    Save with the exact filename shown. Upload to the Google Drive folder shown. 
-    Then approve the script in Email A to continue production.</p>
-    
-    {ref_cards}
-    
+    <p>Generate each image using <strong>GPT Image 2 with thinking mode enabled</strong>.
+    Save with the exact filename. Upload to Google Drive. Then approve the script.</p>
+    {new_char_html}
+    {ref_cards if ref_cards.strip() else ''}
     <div style="margin-top:20px;padding:12px;background:#f0fdf4;border-radius:6px;font-size:13px">
-      <strong>After generating and uploading all images:</strong><br>
-      Return to Email A (Script Approval) and click APPROVE to start production.
+      After generating and uploading all images, return to the Script Approval email and click APPROVE.
     </div>
   </div>
 </div>"""

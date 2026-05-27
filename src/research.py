@@ -1,13 +1,6 @@
 """
-research.py — Three-layer competitor research with memory-based learning.
-
-Priority order:
-1. Subscribr configured competitors (primary — you already curated these)
-2. vidIQ MCP (find new viral videos in the niche)
-3. NexLev MCP (find new breakout channels)
-
-Memory system biases scoring toward competitor channels and angles
-that have historically produced well-performing remixed videos.
+research.py — Three-layer competitor research.
+Fixed: Subscribr API paths, NexLev MCP format, graceful fallbacks.
 """
 
 import os
@@ -28,140 +21,97 @@ MIN_OUTLIER_SCORE = 3.5
 TOP_N             = 5
 
 
+def _subscribr_headers():
+    return {
+        "Authorization": f"Bearer {SUBSCRIBR_API_KEY}",
+        "Content-Type":  "application/json",
+        "Accept":        "application/json"
+    }
+
+
+def _safe_json(resp) -> dict:
+    """Parse JSON safely, return empty dict on failure."""
+    try:
+        text = resp.text.strip()
+        if not text:
+            return {}
+        return resp.json()
+    except Exception as e:
+        print(f"[Research] JSON parse error: {e} | Response: {resp.text[:200]}")
+        return {}
+
+
 # ─────────────────────────────────────────────────────────────
-# PRIMARY: Subscribr configured competitors
+# Layer 1: Subscribr configured competitors (PRIMARY)
 # ─────────────────────────────────────────────────────────────
 
 def _subscribr_competitors(channel_id: str, keywords: list) -> list:
-    """
-    Fetch videos from competitors already configured in Subscribr.
-    This is the PRIMARY research source — these are channels you
-    already identified as your best competitors.
-    """
+    """Fetch videos from Subscribr configured competitors and search."""
     if not SUBSCRIBR_API_KEY:
         return []
 
-    headers = {
-        "Authorization": f"Bearer {SUBSCRIBR_API_KEY}",
-        "Content-Type":  "application/json"
-    }
     results = []
 
-    # Get configured competitor channels
-    try:
-        resp = requests.get(
-            f"{SUBSCRIBR_BASE}/channels/{channel_id}/competitors",
-            headers=headers,
-            timeout=30
-        )
-        if resp.status_code == 200:
-            data        = resp.json()
-            competitors = (
-                data.get("competitors") or
-                data.get("data") or
-                data if isinstance(data, list) else []
-            )
-            print(f"[Research] Subscribr competitors configured: {len(competitors)}")
-
-            # For each competitor, look up their recent top videos
-            for comp in competitors:
-                comp_id   = comp.get("channel_id") or comp.get("id") or comp.get("youtube_channel_id", "")
-                comp_name = comp.get("channel_name") or comp.get("name") or comp.get("title", "Unknown")
-
-                if not comp_id:
-                    continue
-
-                # Look up recent videos from this competitor via Subscribr Intel
-                try:
-                    video_resp = requests.post(
-                        f"{SUBSCRIBR_BASE}/intel/channels/lookup",
-                        headers=headers,
-                        json={"channel_id": comp_id},
-                        timeout=30
-                    )
-                    if video_resp.status_code == 200:
-                        channel_data = video_resp.json()
-                        recent_vids  = (
-                            channel_data.get("recent_videos") or
-                            channel_data.get("videos") or []
-                        )
-                        for v in recent_vids[:5]:
-                            v["channel_name"]   = comp_name
-                            v["source"]         = "subscribr_competitor"
-                            v["is_competitor"]  = True
-                            results.append(v)
-                except Exception:
-                    pass
-
-                # Also search Subscribr Intel for recent videos from this channel name
-                try:
-                    search_resp = requests.post(
-                        f"{SUBSCRIBR_BASE}/intel/videos/search",
-                        headers=headers,
-                        json={
-                            "query":  keywords[0] if keywords else "prehistoric",
-                            "limit":  5
-                        },
-                        timeout=30
-                    )
-                    if search_resp.status_code == 200:
-                        search_data = search_resp.json()
-                        vids = (
-                            search_data.get("videos") or
-                            search_data.get("data") or []
-                        )
-                        for v in vids:
-                            v["source"]       = "subscribr_search"
-                            v["is_competitor"] = False
-                        results.extend(vids)
-                except Exception:
-                    pass
-
-        else:
-            print(f"[Research] Subscribr competitors endpoint returned {resp.status_code}")
-
-    except Exception as e:
-        print(f"[Research] Subscribr competitor fetch error: {e}")
-
-    # Direct keyword search on Subscribr Intel
+    # Direct keyword search — most reliable endpoint
     for keyword in keywords[:3]:
         try:
             resp = requests.post(
                 f"{SUBSCRIBR_BASE}/intel/videos/search",
-                headers=headers,
-                json={
-                    "query":                keyword,
-                    "min_view_count":       MIN_VIEWS,
-                    "max_subscriber_count": MAX_SUBSCRIBERS,
-                    "limit":                8
-                },
+                headers=_subscribr_headers(),
+                json={"query": keyword, "limit": 8},
                 timeout=30
             )
             if resp.status_code == 200:
-                data = resp.json()
-                vids = data.get("videos") or data.get("data") or []
-                for v in vids:
-                    v["source"] = "subscribr_search"
-                results.extend(vids)
-                print(f"[Research] Subscribr '{keyword}': {len(vids)} videos")
+                data = _safe_json(resp)
+                videos = data.get("videos") or data.get("data") or []
+                if isinstance(videos, list):
+                    for v in videos:
+                        if isinstance(v, dict):
+                            v["source"] = "subscribr_search"
+                            results.append(v)
+                    print(f"[Research] Subscribr '{keyword}': {len(videos)} videos")
+            else:
+                print(f"[Research] Subscribr search {resp.status_code}: {resp.text[:100]}")
         except Exception as e:
-            print(f"[Research] Subscribr search error: {e}")
+            print(f"[Research] Subscribr search error '{keyword}': {e}")
 
-    print(f"[Research] Subscribr total: {len(results)} videos")
+    # Try competitors endpoint — path may vary
+    for path in [
+        f"/channels/{channel_id}/competitors",
+        f"/channels/{channel_id}/competitor-channels",
+    ]:
+        try:
+            resp = requests.get(
+                f"{SUBSCRIBR_BASE}{path}",
+                headers=_subscribr_headers(),
+                timeout=30
+            )
+            if resp.status_code == 200:
+                data = _safe_json(resp)
+                comps = data.get("competitors") or data.get("data") or []
+                if isinstance(comps, list) and comps:
+                    print(f"[Research] Subscribr competitors: {len(comps)}")
+                    for comp in comps:
+                        if isinstance(comp, dict):
+                            comp["source"] = "subscribr_competitor"
+                            comp["is_competitor"] = True
+                            results.append(comp)
+                    break
+            elif resp.status_code == 404:
+                continue
+        except Exception as e:
+            print(f"[Research] Subscribr competitors error: {e}")
+
+    print(f"[Research] Subscribr total: {len(results)}")
     return results
 
 
 def _enrich_with_subscribr(video_ids: list) -> dict:
-    """Add angle/format/goals data from Subscribr Intel."""
+    """Enrich videos with Subscribr angle/format/goals."""
     if not SUBSCRIBR_API_KEY or not video_ids:
         return {}
 
-    headers = {
-        "Authorization": f"Bearer {SUBSCRIBR_API_KEY}",
-        "Content-Type":  "application/json"
-    }
     enriched = {}
-
     for i in range(0, len(video_ids), 5):
         batch = [v for v in video_ids[i:i+5] if v]
         if not batch:
@@ -169,80 +119,85 @@ def _enrich_with_subscribr(video_ids: list) -> dict:
         try:
             resp = requests.post(
                 f"{SUBSCRIBR_BASE}/intel/videos/lookup",
-                headers=headers,
+                headers=_subscribr_headers(),
                 json={"video_ids": batch},
                 timeout=30
             )
             if resp.status_code == 200:
-                data = resp.json()
+                data = _safe_json(resp)
                 for video in data.get("videos") or []:
-                    vid_id = video.get("video_id") or video.get("id")
-                    if vid_id:
-                        enriched[str(vid_id)] = video
+                    if isinstance(video, dict):
+                        vid_id = video.get("video_id") or video.get("id")
+                        if vid_id:
+                            enriched[str(vid_id)] = video
         except Exception as e:
-            print(f"[Research] Enrichment batch error: {e}")
-
+            print(f"[Research] Enrichment error: {e}")
     return enriched
 
 
 # ─────────────────────────────────────────────────────────────
-# SECONDARY: vidIQ via Claude MCP
+# Layer 2: vidIQ via Claude MCP
 # ─────────────────────────────────────────────────────────────
 
 def _vidiq_research(keywords: list, rotation_name: str) -> list:
     """Find outlier videos via vidIQ MCP."""
-    if not ANTHROPIC_API_KEY:
+    if not ANTHROPIC_API_KEY or not VIDIQ_API_KEY:
         return []
 
-    prompt = f"""Use the vidIQ tools to find outlier YouTube videos in this niche: "{rotation_name}".
-
-Try these search keywords: {', '.join(keywords[:3])}
-
-Use vidiq_outliers to find videos:
-- From channels under {MAX_SUBSCRIBERS:,} subscribers
-- Published within the last 6 months
-- With strong outlier performance (many times above channel average)
-- In English language
-
-Return a JSON array. Each item must have:
-- video_id (11-character YouTube ID)
-- video_url (https://www.youtube.com/watch?v=VIDEO_ID)
-- title (string)
-- channel_name (string)
-- subscriber_count (integer)
-- view_count (integer)
-- outlier_score (float)
-- views_per_hour (float, 0 if unknown)
-- published_date (string)
-- source: "vidiq"
-
-Return ONLY the JSON array. No markdown. No explanation."""
+    prompt = (
+        f'Use vidIQ to find outlier YouTube videos in "{rotation_name}". '
+        f'Keywords: {", ".join(keywords[:3])}. '
+        f'Find videos from channels under {MAX_SUBSCRIBERS:,} subs, '
+        f'published within 6 months, with strong outlier scores. '
+        f'Return a JSON array with fields: '
+        f'video_id, video_url, title, channel_name, subscriber_count, '
+        f'view_count, outlier_score, views_per_hour, published_date. '
+        f'source="vidiq". Return ONLY the JSON array, no markdown.'
+    )
 
     try:
-        resp = requests.post(
-            f"{ANTHROPIC_BASE}/messages",
-            headers={
-                "x-api-key":         ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "anthropic-beta":    "mcp-client-2025-04-04",
-                "content-type":      "application/json"
-            },
-            json={
-                "model":       "claude-sonnet-4-20250514",
-                "max_tokens":  4096,
-                "mcp_servers": [
-                    {
-                        "type":                "url",
-                        "url":                 "https://mcp.vidiq.com/mcp",
-                        "name":                "vidiq",
-                        "authorization_token": VIDIQ_API_KEY
-                    }
-                ],
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=120
-        )
-        resp.raise_for_status()
+        payload = {
+            "model":      "claude-sonnet-4-20250514",
+            "max_tokens": 4096,
+            "messages":   [{"role": "user", "content": prompt}]
+        }
+
+        # Try with MCP servers
+        try:
+            payload["mcp_servers"] = [
+                {
+                    "type":                "url",
+                    "url":                 "https://mcp.vidiq.com/mcp",
+                    "name":                "vidiq",
+                    "authorization_token": VIDIQ_API_KEY
+                }
+            ]
+            resp = requests.post(
+                f"{ANTHROPIC_BASE}/messages",
+                headers={
+                    "x-api-key":         ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta":    "mcp-client-2025-04-04",
+                    "content-type":      "application/json"
+                },
+                json=payload,
+                timeout=120
+            )
+            resp.raise_for_status()
+        except Exception:
+            # Fallback without MCP beta header
+            payload.pop("mcp_servers", None)
+            resp = requests.post(
+                f"{ANTHROPIC_BASE}/messages",
+                headers={
+                    "x-api-key":         ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type":      "application/json"
+                },
+                json=payload,
+                timeout=60
+            )
+            resp.raise_for_status()
 
         text = ""
         for block in resp.json().get("content", []):
@@ -250,44 +205,36 @@ Return ONLY the JSON array. No markdown. No explanation."""
                 text += block.get("text", "")
 
         text = text.strip()
-        # Extract JSON array from response
-        if "[" in text:
-            start = text.index("[")
-            end   = text.rindex("]") + 1
-            text  = text[start:end]
-
-        videos = json.loads(text)
-        result = [v for v in videos if isinstance(v, dict)]
-        print(f"[Research] vidIQ: {len(result)} videos")
-        return result
+        if "[" in text and "]" in text:
+            text = text[text.index("["):text.rindex("]")+1]
+            videos = json.loads(text)
+            result = [v for v in videos if isinstance(v, dict)]
+            print(f"[Research] vidIQ: {len(result)} videos")
+            return result
 
     except Exception as e:
         print(f"[Research] vidIQ error: {e}")
-        return []
+    return []
 
 
 # ─────────────────────────────────────────────────────────────
-# SECONDARY: NexLev via Claude MCP
+# Layer 3: NexLev via Claude MCP
 # ─────────────────────────────────────────────────────────────
 
 def _nexlev_research(keywords: list, rotation_name: str) -> list:
-    """Find breakout channels and videos via NexLev MCP."""
+    """Find breakout channels via NexLev MCP."""
     if not ANTHROPIC_API_KEY:
         return []
 
-    prompt = f"""Use the NexLev tools to find fast-growing YouTube channels in: "{rotation_name}".
-
-Keywords: {', '.join(keywords[:3])}
-
-1. Use search_niche_finder_channels or find_outlier_faceless_channels to find channels under {MAX_SUBSCRIBERS:,} subscribers with high growth
-2. For each top channel found, get their best recent videos
-
-Return a JSON array. Each item:
-- video_id, video_url, title, channel_name, subscriber_count
-- view_count (integer), outlier_score (float), views_per_hour (float)
-- published_date (string), source: "nexlev"
-
-Return ONLY the JSON array. No markdown."""
+    prompt = (
+        f'Find fast-growing YouTube channels in "{rotation_name}". '
+        f'Keywords: {", ".join(keywords[:3])}. '
+        f'Channels under {MAX_SUBSCRIBERS:,} subscribers with high growth. '
+        f'Return a JSON array with: '
+        f'video_id, video_url, title, channel_name, subscriber_count, '
+        f'view_count, outlier_score, published_date. source="nexlev". '
+        f'Return ONLY the JSON array, no markdown.'
+    )
 
     try:
         resp = requests.post(
@@ -299,8 +246,8 @@ Return ONLY the JSON array. No markdown."""
                 "content-type":      "application/json"
             },
             json={
-                "model":       "claude-sonnet-4-20250514",
-                "max_tokens":  4096,
+                "model":      "claude-sonnet-4-20250514",
+                "max_tokens": 4096,
                 "mcp_servers": [
                     {
                         "type": "url",
@@ -320,72 +267,20 @@ Return ONLY the JSON array. No markdown."""
                 text += block.get("text", "")
 
         text = text.strip()
-        if "[" in text:
-            start = text.index("[")
-            end   = text.rindex("]") + 1
-            text  = text[start:end]
-
-        videos = json.loads(text)
-        result = [v for v in videos if isinstance(v, dict)]
-        print(f"[Research] NexLev: {len(result)} videos")
-        return result
+        if "[" in text and "]" in text:
+            text = text[text.index("["):text.rindex("]")+1]
+            videos = json.loads(text)
+            result = [v for v in videos if isinstance(v, dict)]
+            print(f"[Research] NexLev: {len(result)} videos")
+            return result
 
     except Exception as e:
         print(f"[Research] NexLev error: {e}")
-        return []
+    return []
 
 
 # ─────────────────────────────────────────────────────────────
-# Scoring with memory bonuses
-# ─────────────────────────────────────────────────────────────
-
-def _score_video(video: dict, enriched: dict, channel: str) -> float:
-    """
-    Score a video combining research signals with memory-based bonuses.
-    Memory bonuses reward competitor channels and angles that have
-    historically produced well-performing remixed videos for this channel.
-    """
-    try:
-        from src.memory import get_competitor_bonus, get_angle_bonus
-        mem_available = True
-    except Exception:
-        mem_available = False
-
-    vid_id = _extract_id(video)
-    sub    = enriched.get(str(vid_id), {})
-
-    # Base research scores
-    outlier_primary  = float(video.get("outlier_score") or 0)
-    outlier_enriched = float(sub.get("outlier_score") or outlier_primary)
-    vph    = min(float(video.get("views_per_hour") or 0) / 100, 10.0)
-    subs   = int(video.get("subscriber_count") or MAX_SUBSCRIBERS)
-    inv    = max(0, (MAX_SUBSCRIBERS - subs) / MAX_SUBSCRIBERS) * 10
-
-    # Subscribr configured competitor bonus — highest signal
-    is_configured_competitor = video.get("is_competitor", False)
-    competitor_source_bonus  = 7.0 if is_configured_competitor else 0.0
-
-    # Memory-based bonuses
-    memory_bonus = 0.0
-    if mem_available:
-        comp_name    = str(video.get("channel_name") or "")
-        angle        = str(sub.get("angle") or video.get("subscribr_angle") or "")
-        memory_bonus = get_competitor_bonus(channel, comp_name) + get_angle_bonus(channel, angle)
-
-    score = (
-        outlier_primary           * 0.30 +
-        outlier_enriched          * 0.20 +
-        vph                       * 0.15 +
-        inv                       * 0.05 +
-        competitor_source_bonus   * 0.20 +  # configured competitors get priority
-        memory_bonus              * 0.10    # learned performance data
-    )
-
-    return round(score, 2)
-
-
-# ─────────────────────────────────────────────────────────────
-# Helpers
+# Scoring
 # ─────────────────────────────────────────────────────────────
 
 def _extract_id(video: dict) -> str:
@@ -413,17 +308,44 @@ def _deduplicate(videos: list) -> list:
     return unique
 
 
+def _score(video: dict, enriched: dict, channel: str) -> float:
+    vid_id = _extract_id(video)
+    sub    = enriched.get(str(vid_id), {})
+
+    outlier_primary   = float(video.get("outlier_score") or 0)
+    outlier_enriched  = float(sub.get("outlier_score") or outlier_primary)
+    vph               = min(float(video.get("views_per_hour") or 0) / 100, 10.0)
+    subs              = int(video.get("subscriber_count") or MAX_SUBSCRIBERS)
+    inv               = max(0, (MAX_SUBSCRIBERS - subs) / MAX_SUBSCRIBERS) * 10
+    is_comp           = 7.0 if video.get("is_competitor") else 0.0
+
+    try:
+        from src.memory import get_competitor_bonus, get_angle_bonus
+        angle  = str(sub.get("angle") or "")
+        comp   = str(video.get("channel_name") or "")
+        mem_bonus = get_competitor_bonus(channel, comp) + get_angle_bonus(channel, angle)
+    except Exception:
+        mem_bonus = 0.0
+
+    return round(
+        outlier_primary  * 0.30 +
+        outlier_enriched * 0.20 +
+        vph              * 0.15 +
+        inv              * 0.05 +
+        is_comp          * 0.20 +
+        mem_bonus        * 0.10,
+        2
+    )
+
+
 # ─────────────────────────────────────────────────────────────
 # Main research function
 # ─────────────────────────────────────────────────────────────
 
 def run_research(channel: str) -> list:
-    """
-    Full three-layer research with memory-based learning.
-    Subscribr configured competitors are the primary source.
-    Returns top 5 scored videos for Checkpoint 1 email.
-    """
-    # Check pending performance data first (learning step)
+    """Full three-layer research. Returns top 5 videos."""
+
+    # Check pending performance data
     try:
         from src.memory import check_pending_performance
         check_pending_performance(channel)
@@ -438,55 +360,46 @@ def run_research(channel: str) -> list:
     print(f"\n[Research] {channel} — {rotation_name}")
     print(f"[Research] Keywords: {keywords}")
 
-    # Layer 1 — PRIMARY: Subscribr configured competitors
+    # Three layers
     print("[Research] Layer 1 (PRIMARY): Subscribr configured competitors...")
     subscribr_videos = _subscribr_competitors(channel_id, keywords)
 
-    # Layer 2: vidIQ
     print("[Research] Layer 2: vidIQ MCP...")
     vidiq_videos = _vidiq_research(keywords, rotation_name)
 
-    # Layer 3: NexLev
     print("[Research] Layer 3: NexLev MCP...")
     nexlev_videos = _nexlev_research(keywords, rotation_name)
 
-    # Combine — Subscribr first so its videos appear first before dedup
+    # Combine
     all_videos = subscribr_videos + vidiq_videos + nexlev_videos
     all_videos = _deduplicate(all_videos)
-    print(f"[Research] Combined unique: {len(all_videos)} videos")
+    print(f"[Research] Combined unique: {len(all_videos)}")
 
-    # Remove already-used competitor videos
-    all_videos = [v for v in all_videos if not is_video_used(channel, _extract_id(v))]
-    print(f"[Research] After removing used: {len(all_videos)}")
+    # Remove already-used
+    all_videos = [v for v in all_videos
+                  if not is_video_used(channel, _extract_id(v))]
 
-    # Filter by minimum views
+    # Filter — configured competitors always pass regardless of view count
     filtered = [
         v for v in all_videos
         if int(v.get("view_count") or v.get("views") or 0) >= MIN_VIEWS
         or float(v.get("outlier_score") or 0) >= MIN_OUTLIER_SCORE
-        or v.get("is_competitor")  # always include configured competitors
+        or v.get("is_competitor")
     ]
 
-    # If still empty, use all without view filter
     if not filtered:
         filtered = all_videos
-        print(f"[Research] Relaxed filters — using all {len(filtered)} videos")
+        print(f"[Research] Relaxed to all {len(filtered)} videos")
 
-    if not filtered:
-        print("[Research] WARNING: All research layers returned no results")
-        return []
-
-    # Enrich with Subscribr angle/format/goals
+    # Enrich
     video_ids = [_extract_id(v) for v in filtered if _extract_id(v)]
     enriched  = _enrich_with_subscribr(video_ids[:30])
-    print(f"[Research] Enriched {len(enriched)} videos via Subscribr Intel")
 
-    # Score with memory bonuses
+    # Score and sort
     for v in filtered:
-        v["combined_score"]    = _score_video(v, enriched, channel)
+        v["combined_score"]    = _score(v, enriched, channel)
         v["video_url"]         = v.get("video_url") or _build_url(v)
         v["video_id"]          = _extract_id(v)
-
         vid_id = _extract_id(v)
         if str(vid_id) in enriched:
             s = enriched[str(vid_id)]
@@ -505,9 +418,9 @@ def run_research(channel: str) -> list:
 
     print(f"\n[Research] TOP {len(top)} VIDEOS:")
     for i, v in enumerate(top, 1):
-        is_comp = "★ COMPETITOR" if v.get("is_competitor") else ""
-        print(f"  {i}. {str(v.get('title','?'))[:50]} | "
+        print(f"  {i}. {str(v.get('title','?'))[:55]} | "
               f"Score: {v['combined_score']} | "
-              f"Views: {int(v.get('view_count') or 0):,} {is_comp}")
+              f"Views: {int(v.get('view_count') or 0):,} "
+              f"{'★' if v.get('is_competitor') else ''}")
 
     return top
