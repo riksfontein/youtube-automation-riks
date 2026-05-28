@@ -52,7 +52,56 @@ def _subscribr_competitors(channel_id: str, keywords: list) -> list:
 
     results = []
 
-    # Direct keyword search — most reliable endpoint
+    # Step 1 — Get configured competitor channels
+    # Response: {"success":true,"data":[{"channel_id":"UC...","title":"ExtinctZoo",...}]}
+    competitor_channel_ids = []
+    try:
+        resp = requests.get(
+            f"{SUBSCRIBR_BASE}/channels/{channel_id}/competitors",
+            headers=_subscribr_headers(),
+            timeout=30
+        )
+        if resp.status_code == 200:
+            data  = _safe_json(resp)
+            comps = data.get("data") or []
+            if isinstance(comps, list):
+                print(f"[Research] Subscribr configured competitors: {len(comps)}")
+                for comp in comps:
+                    if isinstance(comp, dict):
+                        yt_id = comp.get("channel_id") or comp.get("youtube_channel_id", "")
+                        title = comp.get("title", "")
+                        if yt_id:
+                            competitor_channel_ids.append({"id": yt_id, "title": title})
+    except Exception as e:
+        print(f"[Research] Subscribr competitors error: {e}")
+
+    # Step 2 — Search for videos from competitor channels via Intel
+    # For each competitor channel, search their recent videos
+    for comp in competitor_channel_ids[:5]:
+        try:
+            resp = requests.post(
+                f"{SUBSCRIBR_BASE}/intel/channels/lookup",
+                headers=_subscribr_headers(),
+                json={"channel_id": comp["id"]},
+                timeout=30
+            )
+            if resp.status_code == 200:
+                data = _safe_json(resp)
+                # Try multiple response shapes
+                channel_data = data.get("data") or data
+                videos = (channel_data.get("recent_videos") or
+                         channel_data.get("videos") or [])
+                for v in videos:
+                    if isinstance(v, dict):
+                        v["channel_name"]  = comp["title"]
+                        v["source"]        = "subscribr_competitor"
+                        v["is_competitor"] = True
+                        results.append(v)
+        except Exception as e:
+            print(f"[Research] Competitor channel lookup error: {e}")
+
+    # Step 3 — Keyword video search
+    # Response: {"success":true,"data":{"videos":[{...}]}}
     for keyword in keywords[:3]:
         try:
             resp = requests.post(
@@ -62,45 +111,24 @@ def _subscribr_competitors(channel_id: str, keywords: list) -> list:
                 timeout=30
             )
             if resp.status_code == 200:
-                data = _safe_json(resp)
-                videos = data.get("videos") or data.get("data") or []
-                if isinstance(videos, list):
-                    for v in videos:
-                        if isinstance(v, dict):
-                            v["source"] = "subscribr_search"
-                            results.append(v)
-                    print(f"[Research] Subscribr '{keyword}': {len(videos)} videos")
+                data   = _safe_json(resp)
+                # Correct path: data["data"]["videos"]
+                inner  = data.get("data") or {}
+                if isinstance(inner, dict):
+                    videos = inner.get("videos") or []
+                elif isinstance(inner, list):
+                    videos = inner
+                else:
+                    videos = []
+                for v in videos:
+                    if isinstance(v, dict):
+                        v["source"] = "subscribr_search"
+                        results.append(v)
+                print(f"[Research] Subscribr '{keyword}': {len(videos)} videos")
             else:
                 print(f"[Research] Subscribr search {resp.status_code}: {resp.text[:100]}")
         except Exception as e:
             print(f"[Research] Subscribr search error '{keyword}': {e}")
-
-    # Try competitors endpoint — path may vary
-    for path in [
-        f"/channels/{channel_id}/competitors",
-        f"/channels/{channel_id}/competitor-channels",
-    ]:
-        try:
-            resp = requests.get(
-                f"{SUBSCRIBR_BASE}{path}",
-                headers=_subscribr_headers(),
-                timeout=30
-            )
-            if resp.status_code == 200:
-                data = _safe_json(resp)
-                comps = data.get("competitors") or data.get("data") or []
-                if isinstance(comps, list) and comps:
-                    print(f"[Research] Subscribr competitors: {len(comps)}")
-                    for comp in comps:
-                        if isinstance(comp, dict):
-                            comp["source"] = "subscribr_competitor"
-                            comp["is_competitor"] = True
-                            results.append(comp)
-                    break
-            elif resp.status_code == 404:
-                continue
-        except Exception as e:
-            print(f"[Research] Subscribr competitors error: {e}")
 
     print(f"[Research] Subscribr total: {len(results)}")
     return results
@@ -124,8 +152,16 @@ def _enrich_with_subscribr(video_ids: list) -> dict:
                 timeout=30
             )
             if resp.status_code == 200:
-                data = _safe_json(resp)
-                for video in data.get("videos") or []:
+                data  = _safe_json(resp)
+                # Response: {"success":true,"data":{"videos":[...]}}
+                inner = data.get("data") or {}
+                if isinstance(inner, dict):
+                    videos_list = inner.get("videos") or []
+                elif isinstance(inner, list):
+                    videos_list = inner
+                else:
+                    videos_list = []
+                for video in videos_list:
                     if isinstance(video, dict):
                         vid_id = video.get("video_id") or video.get("id")
                         if vid_id:
@@ -283,6 +319,38 @@ def _nexlev_research(keywords: list, rotation_name: str) -> list:
 # Scoring
 # ─────────────────────────────────────────────────────────────
 
+def _normalise_video(video: dict) -> dict:
+    """
+    Normalise a video dict from any source to consistent field names.
+    Subscribr returns: video_id, channel:{title,channel_id}, title,
+                       view_count, outlier_score, published_at
+    vidIQ/NexLev return: video_id, channel_name, subscriber_count, etc.
+    """
+    v = dict(video)
+
+    # Flatten nested channel object from Subscribr
+    if isinstance(v.get("channel"), dict):
+        ch = v["channel"]
+        if not v.get("channel_name"):
+            v["channel_name"] = ch.get("title") or ch.get("handle") or ""
+        if not v.get("channel_id"):
+            v["channel_id"] = ch.get("channel_id") or ch.get("id") or ""
+
+    # Ensure video_url exists
+    vid_id = str(v.get("video_id") or v.get("id") or "")
+    url    = str(v.get("video_url") or v.get("url") or "")
+    if not url and vid_id:
+        url = f"https://www.youtube.com/watch?v={vid_id}"
+    v["video_url"] = url
+    v["video_id"]  = vid_id
+
+    # Normalise view count
+    if not v.get("view_count") and v.get("views"):
+        v["view_count"] = v["views"]
+
+    return v
+
+
 def _extract_id(video: dict) -> str:
     vid_id = str(video.get("video_id") or video.get("id") or "")
     url    = str(video.get("video_url") or video.get("url") or "")
@@ -394,6 +462,9 @@ def run_research(channel: str) -> list:
     # Enrich
     video_ids = [_extract_id(v) for v in filtered if _extract_id(v)]
     enriched  = _enrich_with_subscribr(video_ids[:30])
+
+    # Normalise all videos to consistent field names
+    filtered = [_normalise_video(v) for v in filtered]
 
     # Score and sort
     for v in filtered:
