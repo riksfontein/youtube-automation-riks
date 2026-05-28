@@ -376,6 +376,62 @@ def _deduplicate(videos: list) -> list:
     return unique
 
 
+def _filter_relevant(videos: list, rotation_name: str, keywords: list) -> list:
+    """
+    Use Claude to filter out clearly irrelevant videos.
+    Removes videos whose title has no connection to the rotation topic.
+    Fast — single API call for all candidates at once.
+    """
+    if not videos or not ANTHROPIC_API_KEY:
+        return videos
+
+    # Build list of titles to check
+    titles = [
+        {"index": i, "title": str(v.get("title") or ""), "channel": str(v.get("channel_name") or "")}
+        for i, v in enumerate(videos)
+    ]
+
+    prompt = (
+        f"Filter this list of YouTube videos for relevance to the topic: '{rotation_name}'.\n"
+        f"Keywords: {', '.join(keywords[:4])}\n\n"
+        f"Videos:\n"
+        + "\n".join([f"{t['index']}: [{t['channel']}] {t['title']}" for t in titles])
+        + "\n\nReturn ONLY a JSON array of the index numbers that ARE relevant to the topic. "
+        f"Remove anything that is clearly unrelated (e.g. ASMR, cooking, DIY, unrelated animals). "
+        f"Be generous — keep anything that could reasonably relate to {rotation_name}. "
+        f"Return ONLY the JSON array of integers, e.g. [0, 2, 3]. No explanation."
+    )
+
+    try:
+        resp = requests.post(
+            f"{ANTHROPIC_BASE}/messages",
+            headers={
+                "x-api-key":         ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json"
+            },
+            json={
+                "model":      "claude-haiku-4-5-20251001",
+                "max_tokens": 256,
+                "messages":   [{"role": "user", "content": prompt}]
+            },
+            timeout=20
+        )
+        resp.raise_for_status()
+        text = resp.json()["content"][0]["text"].strip()
+        if "[" in text:
+            text = text[text.index("["):text.rindex("]")+1]
+        keep_indices = set(json.loads(text))
+        filtered = [v for i, v in enumerate(videos) if i in keep_indices]
+        removed = len(videos) - len(filtered)
+        if removed > 0:
+            print(f"[Research] Relevance filter removed {removed} irrelevant videos")
+        return filtered
+    except Exception as e:
+        print(f"[Research] Relevance filter error: {e}")
+        return videos
+
+
 def _score(video: dict, enriched: dict, channel: str) -> float:
     vid_id = _extract_id(video)
     sub    = enriched.get(str(vid_id), {})
@@ -446,6 +502,10 @@ def run_research(channel: str) -> list:
     # Remove already-used
     all_videos = [v for v in all_videos
                   if not is_video_used(channel, _extract_id(v))]
+
+    # Filter out irrelevant videos using Claude
+    print("[Research] Checking relevance...")
+    all_videos = _filter_relevant(all_videos, rotation_name, keywords)
 
     # Filter — configured competitors always pass regardless of view count
     filtered = [

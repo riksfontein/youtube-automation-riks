@@ -64,50 +64,99 @@ def _send(subject: str, html: str,
         return {"error": str(e)}
 
 
-def _video_card(video: dict, index: int, job_id: str, channel: str) -> str:
-    """Generate HTML card for a competitor video."""
-    title      = video.get("title", "Unknown")
-    channel_nm = video.get("channel_name", "Unknown")
+def _video_card(video: dict, index: int, job_id: str, channel: str,
+                rotation_name: str = "") -> str:
+    """Generate HTML card for a competitor video with one-click approval."""
+    import urllib.parse
+
+    title      = str(video.get("title") or "Unknown")
+    channel_nm = str(video.get("channel_name") or "Unknown")
     subs       = int(video.get("subscriber_count") or 0)
     views      = int(video.get("view_count") or 0)
-    outlier    = video.get("outlier_score", 0)
-    vph        = video.get("views_per_hour", 0)
-    pub_date   = video.get("published_date", "")
-    url        = video.get("video_url", "#")
-    angle      = video.get("subscribr_angle", "")
-    fmt        = video.get("subscribr_format", "Documentary")
-    goals      = video.get("subscribr_goals", "")
+    outlier    = float(video.get("outlier_score") or 0)
+    vph        = float(video.get("views_per_hour") or 0)
+    pub_date   = str(video.get("published_at") or video.get("published_date") or "")[:10]
+    url        = str(video.get("video_url") or "#")
+    angle      = str(video.get("subscribr_angle") or "")
+    fmt_type   = str(video.get("subscribr_format") or "Documentary")
+    goals      = str(video.get("subscribr_goals") or "")
 
-    # GitHub Actions dispatch URL for stage 2
-    dispatch_url = (
-        f"https://github.com/{GITHUB_REPO}/actions/workflows/stage2_script.yml"
-    )
+    # One-click approval URL — opens approve.html with everything pre-filled
+    params = urllib.parse.urlencode({
+        "channel":  channel,
+        "job_id":   job_id,
+        "url":      url,
+        "title":    title,
+        "subs":     subs,
+        "views":    views,
+        "outlier":  f"{outlier:.1f}",
+        "rotation": rotation_name
+    })
+    approve_url = f"https://{GITHUB_REPO.split('/')[0]}.github.io/{GITHUB_REPO.split('/')[1]}/approve.html?{params}"
+
+    angle_row  = f"<strong>Angle:</strong> {angle}<br>" if angle else ""
+    goals_row  = f"<strong>Viewer goals:</strong> {goals}" if goals else ""
+    insight_block = ""
+    if angle or goals:
+        insight_block = f"""
+  <div style="background:#fff;border-left:3px solid #3b82f6;padding:10px 14px;
+              margin-bottom:12px;font-size:13px;line-height:1.7">
+    <strong>Format:</strong> {fmt_type}<br>
+    {angle_row}{goals_row}
+  </div>"""
 
     return f"""
-<div style="border:1px solid #ddd;border-radius:8px;padding:20px;margin:16px 0;background:#f9f9f9">
-  <div style="font-size:12px;color:#888;margin-bottom:4px">VIDEO {index}</div>
-  <div style="font-size:17px;font-weight:bold;color:#1a1a1a;margin-bottom:8px">{title}</div>
-  <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px">
-    <div><span style="color:#888;font-size:11px">CHANNEL</span><br><strong>{channel_nm}</strong></div>
-    <div><span style="color:#888;font-size:11px">SUBS</span><br><strong>{subs:,}</strong></div>
-    <div><span style="color:#888;font-size:11px">VIEWS</span><br><strong>{views:,}</strong></div>
-    <div><span style="color:#888;font-size:11px">OUTLIER</span><br><strong style="color:#d97706">{outlier:.1f}x</strong></div>
-    <div><span style="color:#888;font-size:11px">VPH</span><br><strong>{vph:.0f}</strong></div>
-    <div><span style="color:#888;font-size:11px">PUBLISHED</span><br><strong>{pub_date}</strong></div>
+<div style="border:1px solid #ddd;border-radius:10px;padding:20px;margin:16px 0;background:#f9f9f9">
+  <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.05em;
+              text-transform:uppercase;margin-bottom:6px">VIDEO {index}</div>
+  <div style="font-size:16px;font-weight:bold;color:#1a1a1a;margin-bottom:14px;
+              line-height:1.4">{title}</div>
+  <table style="border-collapse:separate;border-spacing:0;margin-bottom:14px;width:100%">
+    <tr>
+      <td style="padding:0 20px 0 0;vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">CHANNEL</div>
+        <div style="font-size:13px;font-weight:600;color:#222">{channel_nm}</div>
+      </td>
+      <td style="padding:0 20px 0 0;vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">SUBS</div>
+        <div style="font-size:13px;font-weight:600;color:#222">{subs:,}</div>
+      </td>
+      <td style="padding:0 20px 0 0;vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">VIEWS</div>
+        <div style="font-size:13px;font-weight:600;color:#222">{views:,}</div>
+      </td>
+      <td style="padding:0 20px 0 0;vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">OUTLIER</div>
+        <div style="font-size:13px;font-weight:700;color:#d97706">{outlier:.1f}x</div>
+      </td>
+      <td style="padding:0 20px 0 0;vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">VPH</div>
+        <div style="font-size:13px;font-weight:600;color:#222">{vph:.0f}</div>
+      </td>
+      <td style="vertical-align:top">
+        <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.05em;
+                    text-transform:uppercase;margin-bottom:3px">PUBLISHED</div>
+        <div style="font-size:13px;font-weight:600;color:#222">{pub_date}</div>
+      </td>
+    </tr>
+  </table>
+  {insight_block}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <a href="{url}" target="_blank"
+       style="color:#3b82f6;font-size:13px;text-decoration:none">▶ Watch video</a>
+    <a href="{approve_url}" target="_blank"
+       style="background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;
+              font-size:13px;text-decoration:none;font-weight:bold;white-space:nowrap">
+      SELECT THIS VIDEO →
+    </a>
   </div>
-  <div style="background:#fff;border-left:3px solid #3b82f6;padding:10px 14px;margin-bottom:12px;font-size:13px">
-    <strong>Format:</strong> {fmt}<br>
-    <strong>Angle:</strong> {angle}<br>
-    <strong>Viewer goals:</strong> {goals}
-  </div>
-  <a href="{url}" target="_blank" style="color:#3b82f6;font-size:13px;margin-right:16px">▶ Watch video</a>
-  <a href="{dispatch_url}" target="_blank"
-     style="background:#16a34a;color:#fff;padding:8px 16px;border-radius:6px;font-size:13px;text-decoration:none;font-weight:bold">
-    SELECT THIS VIDEO →
-  </a>
-  <div style="font-size:11px;color:#888;margin-top:8px">
-    After clicking: In GitHub, click "Run workflow", enter job_id: <strong>{job_id}</strong>, 
-    video URL: <code>{url}</code>, video title: <em>{title}</em>
+  <div style="font-size:11px;color:#aaa;margin-top:8px">
+    One click confirms your selection and automatically starts script generation.
   </div>
 </div>"""
 
@@ -131,7 +180,7 @@ def send_checkpoint1(
     date_str   = datetime.now().strftime("%A %d %B %Y")
 
     video_cards = "".join([
-        _video_card(v, i+1, job_id, channel)
+        _video_card(v, i+1, job_id, channel, rotation_name)
         for i, v in enumerate(top_videos[:5])
     ])
 
