@@ -19,7 +19,9 @@ from datetime import datetime
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.state import (
+from datetime import datetime, timezone
+from src.state import (  # noqa
+    load_state, save_state,
     load_state, get_channel_state, check_and_advance_rotation,
     create_job, get_job, update_job, complete_job,
     get_rotation_status, get_rotation_keywords
@@ -103,6 +105,25 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
     channel_id = ch_state["subscribr_channel_id"]
     channel_name = ch_state["channel_name"]
 
+    # Ensure job exists — create it if Stage 1's git push didn't persist it
+    try:
+        get_job(job_id)
+        print(f"[Main] Found existing job: {job_id}")
+    except ValueError:
+        print(f"[Main] Job {job_id} not in state.json — creating from parameters")
+        state = load_state()
+        state["pending_jobs"][job_id] = {
+            "channel":    channel,
+            "stage":      2,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "data": {
+                "competitor_video_url":   video_url,
+                "competitor_video_title": video_title,
+                "rotation_name":          rotation_name
+            }
+        }
+        save_state(state)
+
     # Store competitor video info in job
     update_job(job_id, {
         "competitor_video_url":   video_url,
@@ -150,15 +171,22 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
         ab_titles=result["ab_titles"]
     )
 
-    # Send Email B (reference images) simultaneously
-    if missing_refs:
+    # Get new characters needing reference sheets
+    from src.references import get_new_characters
+    new_chars = get_new_characters(ref_analysis)
+
+    # Send Email B (reference images + new character sheets) simultaneously
+    if missing_refs or new_chars:
         send_reference_images(
             channel=channel,
             job_id=job_id,
             video_title=result["ab_titles"][0] if result["ab_titles"] else "New Video",
-            missing_refs=missing_refs
+            missing_refs=missing_refs,
+            new_characters=new_chars
         )
-        print(f"[Main] {len(missing_refs)} missing references notified")
+        print(f"[Main] {len(missing_refs)} missing refs, {len(new_chars)} new characters notified")
+        # Store new characters in job for storyboard update after approval
+        update_job(job_id, {"new_characters": new_chars})
     else:
         print("[Main] All references covered — no reference email needed")
 
