@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YouTube Automation — Approve</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:#0f1117;color:#e2e8f0;min-height:100vh;
+       display:flex;align-items:center;justify-content:center;padding:1rem}
+  .card{background:#1e2130;border:1px solid #2d3348;border-radius:16px;
+        padding:2rem;max-width:600px;width:100%}
+  .logo{font-size:.75rem;font-weight:600;letter-spacing:.1em;
+        text-transform:uppercase;color:#475569;margin-bottom:1.5rem}
+  h1{font-size:1.3rem;font-weight:500;color:#f1f5f9;margin-bottom:.5rem}
+  .subtitle{font-size:.85rem;color:#64748b;margin-bottom:1.5rem}
+  .video-box{background:#0f1117;border:1px solid #2d3348;border-radius:10px;
+             padding:1.25rem;margin-bottom:1.5rem}
+  .video-title{font-size:1rem;font-weight:500;color:#f1f5f9;margin-bottom:.5rem;line-height:1.4}
+  .meta{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.75rem}
+  .meta-item{font-size:.75rem;color:#64748b}
+  .meta-item strong{color:#94a3b8}
+  .watch-link{display:inline-block;margin-top:.75rem;font-size:.8rem;
+              color:#60a5fa;text-decoration:none}
+  .watch-link:hover{text-decoration:underline}
+  .info-row{display:flex;justify-content:space-between;font-size:.8rem;
+            padding:.5rem 0;border-bottom:1px solid #1e2130;color:#64748b}
+  .info-row:last-child{border-bottom:none}
+  .info-row strong{color:#94a3b8}
+  .info-section{background:#0f1117;border:1px solid #2d3348;border-radius:8px;
+                padding:1rem;margin-bottom:1.5rem}
+  .btn{display:block;width:100%;padding:1rem;border:none;border-radius:10px;
+       font-size:1rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+  .btn-confirm{background:#16a34a;color:#fff}
+  .btn-confirm:hover{opacity:.9}
+  .btn-confirm:disabled{opacity:.5;cursor:not-allowed}
+  .btn-back{background:transparent;border:1px solid #2d3348;color:#64748b;
+            margin-top:.75rem;font-size:.85rem}
+  .btn-back:hover{background:#1e2130}
+  .status{text-align:center;padding:1rem;border-radius:8px;margin-top:1rem;
+          font-size:.9rem;display:none}
+  .status.success{background:#14532d;color:#4ade80}
+  .status.error  {background:#450a0a;color:#fca5a5}
+  .status.loading{background:#1e3a5f;color:#93c5fd}
+  .token-section{margin-bottom:1.5rem}
+  .token-label{font-size:.75rem;color:#64748b;margin-bottom:.4rem}
+  .token-input{width:100%;background:#0f1117;border:1px solid #2d3348;
+               border-radius:6px;padding:.6rem .75rem;color:#e2e8f0;
+               font-size:.8rem;font-family:monospace}
+  .token-note{font-size:.7rem;color:#475569;margin-top:.4rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">YouTube Automation · Ancient Earth Cinema</div>
+  <h1 id="page-title">Confirm Video Selection</h1>
+  <p class="subtitle" id="page-sub">Review the selected video then click confirm to generate the script.</p>
+
+  <div id="video-section" class="video-box">
+    <div id="v-title" class="video-title">Loading...</div>
+    <a id="v-link" href="#" target="_blank" class="watch-link">▶ Watch video</a>
+    <div class="meta" id="v-meta"></div>
+  </div>
+
+  <div class="info-section">
+    <div class="info-row"><span>Channel</span><strong id="v-channel">—</strong></div>
+    <div class="info-row"><span>Rotation</span><strong id="v-rotation">—</strong></div>
+    <div class="info-row"><span>Job ID</span><strong id="v-job">—</strong></div>
+  </div>
+
+  <div class="token-section">
+    <div class="token-label">GitHub Personal Access Token (stored locally in your browser)</div>
+    <input type="password" class="token-input" id="pat-input"
+           placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+           oninput="saveToken(this.value)">
+    <div class="token-note">Required once. Stored only in your browser. Never sent anywhere except GitHub.</div>
+  </div>
+
+  <button class="btn btn-confirm" id="confirm-btn" onclick="confirm()">
+    CONFIRM — GENERATE SCRIPT →
+  </button>
+  <button class="btn btn-back" onclick="history.back()">← Go back</button>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const REPO = "riksfontein/youtube-automation-riks";
+const WORKFLOW = "stage2_script.yml";
+
+function getParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    channel:     p.get("channel")  || "AE",
+    job_id:      p.get("job_id")   || "",
+    video_url:   p.get("url")      || "",
+    video_title: p.get("title")    || "Selected Video",
+    subs:        p.get("subs")     || "",
+    views:       p.get("views")    || "",
+    outlier:     p.get("outlier")  || "",
+    rotation:    p.get("rotation") || ""
+  };
+}
+
+function saveToken(val) {
+  if (val) localStorage.setItem("gh_pat", val);
+}
+
+function loadToken() {
+  return localStorage.getItem("gh_pat") || "";
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.className = "status " + type;
+  el.style.display = "block";
+}
+
+function fmt(n) {
+  const num = parseInt(n);
+  if (!num) return "—";
+  if (num >= 1000000) return (num/1000000).toFixed(1) + "M";
+  if (num >= 1000) return (num/1000).toFixed(0) + "K";
+  return num.toLocaleString();
+}
+
+window.onload = function() {
+  const p = getParams();
+
+  // Pre-fill UI
+  document.getElementById("v-title").textContent = decodeURIComponent(p.video_title);
+  document.getElementById("v-link").href = decodeURIComponent(p.video_url);
+  document.getElementById("v-channel").textContent = p.channel;
+  document.getElementById("v-rotation").textContent = decodeURIComponent(p.rotation) || "—";
+  document.getElementById("v-job").textContent = p.job_id;
+
+  // Meta pills
+  const meta = document.getElementById("v-meta");
+  if (p.subs)    meta.innerHTML += `<div class="meta-item"><strong>Subs</strong> ${fmt(p.subs)}</div>`;
+  if (p.views)   meta.innerHTML += `<div class="meta-item"><strong>Views</strong> ${fmt(p.views)}</div>`;
+  if (p.outlier) meta.innerHTML += `<div class="meta-item"><strong>Outlier</strong> ${parseFloat(p.outlier).toFixed(1)}x</div>`;
+
+  // Load saved token
+  const saved = loadToken();
+  if (saved) {
+    document.getElementById("pat-input").value = saved;
+  }
+};
+
+async function confirm() {
+  const p     = getParams();
+  const token = document.getElementById("pat-input").value.trim() || loadToken();
+
+  if (!token) {
+    showStatus("Please enter your GitHub Personal Access Token first.", "error");
+    return;
+  }
+  if (!p.job_id) {
+    showStatus("Missing job_id — please use the link from the email.", "error");
+    return;
+  }
+
+  const btn = document.getElementById("confirm-btn");
+  btn.disabled = true;
+  showStatus("Triggering script generation...", "loading");
+
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type":  "application/json",
+          "Accept":        "application/vnd.github+json"
+        },
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            channel:              p.channel,
+            selected_video_url:   decodeURIComponent(p.video_url),
+            selected_video_title: decodeURIComponent(p.video_title),
+            job_id:               p.job_id
+          }
+        })
+      }
+    );
+
+    if (resp.status === 204) {
+      showStatus("✓ Script generation started! Check your email in 5-10 minutes for the script approval.", "success");
+      btn.textContent = "✓ Script generation triggered";
+    } else {
+      const err = await resp.text();
+      if (resp.status === 401) {
+        showStatus("Invalid GitHub token. Check your Personal Access Token and try again.", "error");
+      } else if (resp.status === 404) {
+        showStatus("Workflow not found. Check the repo name and workflow file exist.", "error");
+      } else {
+        showStatus(`GitHub API error ${resp.status}: ${err.substring(0,200)}`, "error");
+      }
+      btn.disabled = false;
+    }
+  } catch(e) {
+    showStatus(`Request failed: ${e.message}`, "error");
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
