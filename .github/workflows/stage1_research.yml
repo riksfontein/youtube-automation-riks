@@ -76,9 +76,13 @@ jobs:
         run: python src/generate_dashboard.py
         continue-on-error: true
       - name: Commit state updates
+        env:
+          GH_PAT: ${{ secrets.GITHUB_PAT }}
         run: |
           git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
-          git add state.json docs/index.html
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git
+          git add state.json
+          git add docs/index.html 2>/dev/null || true
           git diff --staged --quiet || git commit -m "Stage 1: ${{ steps.channel.outputs.channel }} research complete"
-          git push https://x-access-token:${{ secrets.GITHUB_PAT }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin HEAD:main
