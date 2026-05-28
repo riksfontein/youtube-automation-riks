@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,31 +39,47 @@ jobs:
 
       - name: Run Stage 2 Script Generation
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          SUBSCRIBR_API_KEY: ${{ secrets.SUBSCRIBR_API_KEY }}
-          VIDIQ_API_KEY: ${{ secrets.VIDIQ_API_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_MAIN }}
-          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
-          GITHUB_REPO: ${{ github.repository }}
-          CHANNEL: ${{ github.event.inputs.channel }}
-          SELECTED_VIDEO_URL: ${{ github.event.inputs.selected_video_url }}
-          SELECTED_VIDEO_TITLE: ${{ github.event.inputs.selected_video_title }}
-          JOB_ID: ${{ github.event.inputs.job_id }}
-        run: python src/main.py --stage 2 --channel $CHANNEL --video-url "$SELECTED_VIDEO_URL" --video-title "$SELECTED_VIDEO_TITLE" --job-id $JOB_ID
-
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY:        ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID_AE:    ${{ secrets.ELEVENLABS_VOICE_ID_AE }}
+          ELEVENLABS_VOICE_ID_GIA:   ${{ secrets.ELEVENLABS_VOICE_ID_GIA }}
+          ELEVENLABS_VOICE_ID_BF:    ${{ secrets.ELEVENLABS_VOICE_ID_BF }}
+          SUBSCRIBR_API_KEY:         ${{ secrets.SUBSCRIBR_API_KEY }}
+          SUBSCRIBR_CHANNEL_ID_AE:   ${{ secrets.SUBSCRIBR_CHANNEL_ID_AE }}
+          SUBSCRIBR_CHANNEL_ID_GIA:  ${{ secrets.SUBSCRIBR_CHANNEL_ID_GIA }}
+          SUBSCRIBR_CHANNEL_ID_BF:   ${{ secrets.SUBSCRIBR_CHANNEL_ID_BF }}
+          VIDIQ_API_KEY:             ${{ secrets.VIDIQ_API_KEY }}
+          RESEND_API_KEY:            ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL:         ${{ secrets.RESEND_FROM_EMAIL }}
+          RESEND_TO_EMAIL:           ${{ secrets.RESEND_TO_EMAIL }}
+          YOUTUBE_CLIENT_ID:         ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET:     ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN_AE:  ${{ secrets.YOUTUBE_REFRESH_TOKEN_AE }}
+          YOUTUBE_REFRESH_TOKEN_GIA: ${{ secrets.YOUTUBE_REFRESH_TOKEN_GIA }}
+          YOUTUBE_REFRESH_TOKEN_BF:  ${{ secrets.YOUTUBE_REFRESH_TOKEN_BF }}
+          GOOGLE_DRIVE_FOLDER_ID:    ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          MY_GITHUB_PAT:             ${{ secrets.GITHUB_PAT }}
+          GITHUB_REPO:               ${{ github.repository }}
+          CHANNEL:                   ${{ github.event.inputs.channel }}
+          SELECTED_VIDEO_URL:        ${{ github.event.inputs.selected_video_url }}
+          SELECTED_VIDEO_TITLE:      ${{ github.event.inputs.selected_video_title }}
+          JOB_ID:                    ${{ github.event.inputs.job_id }}
+        run: |
+          python src/main.py \
+            --stage 2 \
+            --channel $CHANNEL \
+            --video-url "$SELECTED_VIDEO_URL" \
+            --video-title "$SELECTED_VIDEO_TITLE" \
+            --job-id $JOB_ID
 
       - name: Generate dashboard
         run: python src/generate_dashboard.py
         continue-on-error: true
+
       - name: Commit state updates
         run: |
-          git config --global user.email "automation@riksfontein.com"
+          git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
           git add state.json docs/index.html
-          git diff --staged --quiet || git commit -m "Stage 2 complete: ${{ github.event.inputs.channel }} script generated"
+          git diff --staged --quiet || git commit -m "Stage 2: ${{ github.event.inputs.channel }} script generated"
           git push https://x-access-token:${{ secrets.GITHUB_PAT }}@github.com/${{ github.repository }}.git HEAD:main
