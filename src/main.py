@@ -1,11 +1,5 @@
 """
 main.py — Master orchestration for the YouTube automation system.
-
-Usage:
-  python src/main.py --stage 1 --channel AE
-  python src/main.py --stage 2 --channel AE --video-url URL --video-title TITLE --job-id ID
-  python src/main.py --stage 3 --channel AE --job-id ID --action approve
-  python src/main.py --stage 4 --channel AE --job-id ID --drive-folder URL
 """
 
 import argparse
@@ -14,17 +8,15 @@ import sys
 import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from datetime import datetime, timezone
-from src.state import (  # noqa
-    load_state, save_state,
-    load_state, get_channel_state, check_and_advance_rotation,
-    create_job, get_job, update_job, complete_job,
-    get_rotation_status, get_rotation_keywords
+from src.state import (
+    load_state, save_state, get_channel_state,
+    check_and_advance_rotation, create_job, get_job,
+    update_job, complete_job, get_rotation_status
 )
 from src.email_sender import (
     send_checkpoint1, send_checkpoint2, send_reference_images,
@@ -32,25 +24,24 @@ from src.email_sender import (
 )
 
 
+# ─────────────────────────────────────────────────────────────
+# Stage 1
+# ─────────────────────────────────────────────────────────────
+
 def stage1_research(channel: str):
-    """
-    Stage 1: Research competitors + send Checkpoint 1 email.
-    """
     print(f"\n{'='*60}")
     print(f"STAGE 1 — RESEARCH — {channel}")
     print(f"{'='*60}\n")
 
     from src.research import run_research
 
-    # Check for rotation switch
     switched, new_rotation = check_and_advance_rotation(channel)
     ch_state = get_channel_state(channel)
 
     if switched:
-        print(f"[Main] Rotation switched to: {new_rotation}")
-        # Get previous rotation name for the notification
         rotations = ch_state["rotations"]
-        prev_num = str(ch_state["current_rotation"] - 1 or len(rotations))
+        cur = ch_state["current_rotation"]
+        prev_num = str(cur - 1 if cur > 1 else len(rotations))
         old_rotation = rotations.get(prev_num, "Previous Rotation")
         send_rotation_change(channel, old_rotation, new_rotation)
 
@@ -58,23 +49,18 @@ def stage1_research(channel: str):
     print(f"[Main] Rotation: {rotation_status['rotation_name']}")
     print(f"[Main] Videos: {rotation_status['videos_in_rotation']}/{rotation_status['rotation_threshold']}")
 
-    # Run three-layer research
     top_videos = run_research(channel)
 
     if not top_videos:
-        print("[Main] WARNING: No videos found in research. Check API connections.")
-        top_videos = []  # Send empty email as notification
+        print("[Main] WARNING: Research returned no videos.")
 
-    # Create job
     job_id = create_job(channel, 1, {
-        "top_videos": top_videos,
-        "rotation_name": rotation_status["rotation_name"],
+        "top_videos":        top_videos,
+        "rotation_name":     rotation_status["rotation_name"],
         "videos_in_rotation": rotation_status["videos_in_rotation"]
     })
-
     print(f"[Main] Job created: {job_id}")
 
-    # Send Checkpoint 1 email
     send_checkpoint1(
         channel=channel,
         rotation_name=rotation_status["rotation_name"],
@@ -83,35 +69,35 @@ def stage1_research(channel: str):
         top_videos=top_videos,
         job_id=job_id
     )
+    print(f"[Main] Stage 1 complete. Job ID: {job_id}")
 
-    print(f"\n[Main] Stage 1 complete. Checkpoint 1 email sent to info@croki.store")
-    print(f"[Main] Waiting for video selection... Job ID: {job_id}")
 
+# ─────────────────────────────────────────────────────────────
+# Stage 2
+# ─────────────────────────────────────────────────────────────
 
 def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
-    """
-    Stage 2: Generate script from selected competitor video.
-    Sends Checkpoint 2 (script approval) + Email B (reference images).
-    """
     print(f"\n{'='*60}")
     print(f"STAGE 2 — SCRIPT GENERATION — {channel}")
     print(f"{'='*60}\n")
 
     from src.subscribr import full_script_pipeline
-    from src.references import analyse_script_references, get_missing_references
+    from src.references import analyse_script_references, get_missing_references, get_new_characters
 
-    ch_state = get_channel_state(channel)
+    ch_state     = get_channel_state(channel)
     rotation_name = ch_state["rotation_name"]
-    channel_id = ch_state["subscribr_channel_id"]
+    channel_id   = ch_state["subscribr_channel_id"]
     channel_name = ch_state["channel_name"]
 
-    # Ensure job exists — create it if Stage 1's git push didn't persist it
+    # Ensure job exists — create from parameters if Stage 1 push didn't persist it
     try:
         get_job(job_id)
         print(f"[Main] Found existing job: {job_id}")
     except ValueError:
-        print(f"[Main] Job {job_id} not in state.json — creating from parameters")
+        print(f"[Main] Job {job_id} not found — creating from parameters")
         state = load_state()
+        if "pending_jobs" not in state:
+            state["pending_jobs"] = {}
         state["pending_jobs"][job_id] = {
             "channel":    channel,
             "stage":      2,
@@ -124,14 +110,13 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
         }
         save_state(state)
 
-    # Store competitor video info in job
     update_job(job_id, {
         "competitor_video_url":   video_url,
         "competitor_video_title": video_title,
-        "competitor_video_id":    _extract_video_id_from_url(video_url)
+        "competitor_video_id":    _extract_video_id(video_url)
     })
 
-    # Run Subscribr pipeline
+    # Run Subscribr script pipeline
     result = full_script_pipeline(
         channel_id=channel_id,
         rotation_name=rotation_name,
@@ -140,7 +125,6 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
         video_title=video_title
     )
 
-    # Store script in job
     update_job(job_id, {
         "script_id":   result["script_id"],
         "idea_id":     result["idea_id"],
@@ -149,17 +133,19 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
         "word_count":  result["word_count"]
     })
 
-    # Analyse reference images
-    print("[Main] Analysing reference image requirements...")
+    # Analyse references
+    print("[Main] Analysing reference images...")
     ref_analysis = analyse_script_references(result["script_text"], channel)
     missing_refs = get_missing_references(ref_analysis)
+    new_chars    = get_new_characters(ref_analysis)
 
     update_job(job_id, {
-        "ref_analysis": ref_analysis,
-        "missing_refs": missing_refs
+        "ref_analysis":  ref_analysis,
+        "missing_refs":  missing_refs,
+        "new_characters": new_chars
     })
 
-    # Send Checkpoint 2 (script approval)
+    # Send Checkpoint 2
     send_checkpoint2(
         channel=channel,
         rotation_name=rotation_name,
@@ -171,11 +157,7 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
         ab_titles=result["ab_titles"]
     )
 
-    # Get new characters needing reference sheets
-    from src.references import get_new_characters
-    new_chars = get_new_characters(ref_analysis)
-
-    # Send Email B (reference images + new character sheets) simultaneously
+    # Send Email B if references are missing
     if missing_refs or new_chars:
         send_reference_images(
             channel=channel,
@@ -185,74 +167,65 @@ def stage2_script(channel: str, video_url: str, video_title: str, job_id: str):
             new_characters=new_chars
         )
         print(f"[Main] {len(missing_refs)} missing refs, {len(new_chars)} new characters notified")
-        # Store new characters in job for storyboard update after approval
-        update_job(job_id, {"new_characters": new_chars})
     else:
-        print("[Main] All references covered — no reference email needed")
+        print("[Main] All references covered")
 
-    print(f"\n[Main] Stage 2 complete. Checkpoint 2 + reference emails sent.")
-    print(f"[Main] Waiting for script approval...")
+    print(f"[Main] Stage 2 complete. Job ID: {job_id}")
 
+
+# ─────────────────────────────────────────────────────────────
+# Stage 3
+# ─────────────────────────────────────────────────────────────
 
 def stage3_documents(channel: str, job_id: str, action: str):
-    """
-    Stage 3: Generate 5 production documents.
-    Triggered by script approval.
-    If action is 'regenerate', reruns script generation.
-    """
     print(f"\n{'='*60}")
-    print(f"STAGE 3 — DOCUMENT GENERATION — {channel} ({action})")
+    print(f"STAGE 3 — DOCUMENTS — {channel} ({action})")
     print(f"{'='*60}\n")
 
     if action == "regenerate":
-        # Re-run stage 2 with same video
         job = get_job(job_id)
         data = job["data"]
         stage2_script(
             channel=channel,
-            video_url=data["competitor_video_url"],
-            video_title=data["competitor_video_title"],
+            video_url=data.get("competitor_video_url", ""),
+            video_title=data.get("competitor_video_title", ""),
             job_id=job_id
         )
         return
 
     from src.tts import (
         generate_tts_with_timestamps, generate_music,
-        assign_scene_timings, extract_chapter_timings, format_chapters_for_description
+        assign_scene_timings, extract_chapter_timings,
+        format_chapters_for_description
     )
     from src.documents import build_all_documents, generate_metadata
     from src.subscribr import generate_thumbnails
     from src.drive import create_video_folder, upload_file
 
-    job    = get_job(job_id)
-    data   = job["data"]
+    job      = get_job(job_id)
+    data     = job["data"]
     ch_state = get_channel_state(channel)
 
     script_text = data["script_text"]
     ab_titles   = data["ab_titles"]
-    idea_id     = data.get("idea_id")
+    idea_id     = data.get("idea_id", "")
     voice_id    = ch_state["voice_id"]
-
     video_title = ab_titles[0] if ab_titles else "Documentary Video"
 
-    # Work directory
     work_dir = Path(tempfile.mkdtemp()) / f"{channel}_{job_id}"
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate TTS with timestamps
-    print("[Main] Generating TTS narration...")
-    tts_result = generate_tts_with_timestamps(script_text, voice_id, work_dir)
-
-    # Assign scene timings
+    # TTS
+    tts_result    = generate_tts_with_timestamps(script_text, voice_id, work_dir)
     scene_timings = assign_scene_timings(script_text, tts_result["timestamps_path"])
     chapter_timings = extract_chapter_timings(script_text, scene_timings)
-    chapters_text = format_chapters_for_description(chapter_timings)
+    chapters_text   = format_chapters_for_description(chapter_timings)
 
-    # Generate music
-    music_prompt = ch_state.get("music_prompt", "Cinematic documentary score, orchestral, building tension, completely instrumental, absolutely no vocals, no singing, no choir")
-    music_path = generate_music(tts_result["total_duration_seconds"], music_prompt, work_dir)
+    # Music
+    music_prompt = "Cinematic documentary score, orchestral, building tension, completely instrumental, no vocals"
+    music_path   = generate_music(tts_result["total_duration_seconds"], music_prompt, work_dir)
 
-    # Generate metadata (description, tags, hashtags)
+    # Metadata
     metadata = generate_metadata(
         script_text=script_text,
         ab_titles=ab_titles,
@@ -261,20 +234,18 @@ def stage3_documents(channel: str, job_id: str, action: str):
         chapter_timings=chapter_timings
     )
 
-    # Generate thumbnails
-    print("[Main] Generating thumbnails...")
-    competitor_thumbnail_url = data.get("competitor_thumbnail_url")
+    # Thumbnails
     thumbnails = generate_thumbnails(
         channel_id=ch_state["subscribr_channel_id"],
         idea_id=idea_id,
-        competitor_thumbnail_url=competitor_thumbnail_url
+        competitor_thumbnail_url=data.get("competitor_thumbnail_url")
     )
 
-    # Build Google Drive folder
+    # Drive folder
     base_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")
-    drive_folders = create_video_folder(channel, video_title, base_folder_id)
+    drive_folders  = create_video_folder(channel, video_title, base_folder_id)
 
-    # Build all 5 documents
+    # Documents
     docs_result = build_all_documents(
         script_text=script_text,
         channel=channel,
@@ -283,13 +254,13 @@ def stage3_documents(channel: str, job_id: str, action: str):
         output_dir=work_dir / "documents"
     )
 
-    # Upload audio and SRT to Drive
-    upload_file(tts_result["audio_path"], drive_folders["output_folder_id"])
-    upload_file(tts_result["srt_path"],   drive_folders["output_folder_id"])
-    if music_path:
+    # Upload audio/SRT/music to Drive
+    for path in [tts_result["audio_path"], tts_result["srt_path"]]:
+        if path and Path(path).exists():
+            upload_file(path, drive_folders["output_folder_id"])
+    if music_path and Path(music_path).exists():
         upload_file(music_path, drive_folders["output_folder_id"])
 
-    # Store everything in job
     update_job(job_id, {
         "video_title":            video_title,
         "scene_timings":          scene_timings,
@@ -305,7 +276,6 @@ def stage3_documents(channel: str, job_id: str, action: str):
         "doc_paths":              docs_result
     })
 
-    # Send documents email with attachments
     send_documents(
         channel=channel,
         job_id=job_id,
@@ -314,23 +284,22 @@ def stage3_documents(channel: str, job_id: str, action: str):
         drive_folder_url=drive_folders["video_folder_url"],
         doc_paths=docs_result
     )
+    print(f"[Main] Stage 3 complete. Drive: {drive_folders['video_folder_url']}")
 
-    print(f"\n[Main] Stage 3 complete. 5 documents sent to info@croki.store")
-    print(f"[Main] Drive folder: {drive_folders['video_folder_url']}")
-    print(f"[Main] Waiting for assets (images + videos)...")
 
+# ─────────────────────────────────────────────────────────────
+# Stage 4
+# ─────────────────────────────────────────────────────────────
 
 def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
-    """
-    Stage 4: Download assets, assemble video, upload to YouTube, send delivery email.
-    """
     print(f"\n{'='*60}")
-    print(f"STAGE 4 — ASSEMBLY & UPLOAD — {channel}")
+    print(f"STAGE 4 — ASSEMBLY — {channel}")
     print(f"{'='*60}\n")
 
     from src.drive import (
-        get_folder_id_from_url, list_folder_files, download_assets_folder,
-        upload_file, get_or_create_folder, upload_final_video
+        get_folder_id_from_url, list_folder_files,
+        download_assets_folder, upload_file,
+        get_or_create_folder, upload_final_video, download_file
     )
     from src.assembly import assemble_video, sanitize_filename
     from src.youtube import upload_video, download_thumbnail_from_url
@@ -350,7 +319,7 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
     work_dir = Path(tempfile.mkdtemp()) / f"{channel}_{job_id}_assembly"
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get folder IDs from the provided URL (or from saved state)
+    # Resolve folder IDs
     if drive_folder_url:
         video_folder_id = get_folder_id_from_url(drive_folder_url)
         if video_folder_id:
@@ -366,56 +335,37 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
         videos_folder_id = drive_folders.get("videos_folder_id")
         output_folder_id = drive_folders.get("output_folder_id")
 
-    # Download video clips from Drive
-    print("[Main] Downloading video clips from Google Drive...")
-    video_clips = download_assets_folder(
-        videos_folder_id,
-        str(work_dir / "videos"),
-        asset_type="videos"
-    )
-
+    # Download video clips
+    video_clips = download_assets_folder(videos_folder_id, str(work_dir / "videos"), "videos")
     if not video_clips:
-        raise RuntimeError("[Main] No video clips found in Drive videos/ folder")
+        raise RuntimeError("[Main] No video clips in Drive videos/ folder")
 
-    print(f"[Main] Downloaded {len(video_clips)} video clips")
-
-    # Download audio from Drive (already generated in Stage 3)
-    print("[Main] Downloading audio assets...")
-    audio_files = list_folder_files(output_folder_id, ".wav")
-    music_files = list_folder_files(output_folder_id, ".mp3")
-    srt_files   = list_folder_files(output_folder_id, ".srt")
-
+    # Download audio assets
     audio_path = None
     music_path = None
     srt_path   = None
 
-    for f in audio_files:
-        if "narration" in f["name"].lower():
-            audio_path = str(work_dir / f["name"])
-            from src.drive import download_file
-            download_file(f["id"], audio_path)
-            break
-
-    for f in music_files:
-        music_path = str(work_dir / f["name"])
-        from src.drive import download_file
-        download_file(f["id"], music_path)
-        break
-
-    for f in srt_files:
-        srt_path = str(work_dir / f["name"])
-        from src.drive import download_file
-        download_file(f["id"], srt_path)
-        break
+    for f in list_folder_files(output_folder_id):
+        name = f["name"]
+        local = str(work_dir / name)
+        if "narration" in name.lower() and name.endswith(".wav") and not audio_path:
+            download_file(f["id"], local)
+            audio_path = local
+        elif name.endswith(".mp3") and not music_path:
+            download_file(f["id"], local)
+            music_path = local
+        elif name.endswith(".srt") and not srt_path:
+            download_file(f["id"], local)
+            srt_path = local
 
     if not audio_path:
         raise RuntimeError("[Main] Narration audio not found in Drive output/ folder")
     if not srt_path:
-        raise RuntimeError("[Main] Captions SRT not found in Drive output/ folder")
+        raise RuntimeError("[Main] SRT captions not found in Drive output/ folder")
 
-    # Assemble final video
+    # Assemble
     safe_filename = sanitize_filename(ab_titles[0] if ab_titles else video_title)
-    output_path = str(work_dir / safe_filename)
+    output_path   = str(work_dir / safe_filename)
 
     assemble_video(
         video_clips=video_clips,
@@ -428,44 +378,35 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
         work_dir=str(work_dir / "work")
     )
 
-    print(f"[Main] Assembly complete: {output_path}")
-
     # Download thumbnails
     thumbnail_paths = []
     for thumb in thumbnails[:3]:
         url = thumb.get("url", "")
         if url:
-            local_path = str(work_dir / f"thumbnail_{thumb['variant']}.jpg")
-            result = download_thumbnail_from_url(url, local_path)
-            if result:
+            local = str(work_dir / f"thumbnail_{thumb['variant']}.jpg")
+            if download_thumbnail_from_url(url, local):
                 thumbnail_paths.append({
                     "variant": thumb["variant"],
-                    "label":   thumb["label"],
-                    "path":    result
+                    "label":   thumb.get("label", ""),
+                    "path":    local
                 })
 
-    # Upload to YouTube (unlisted, Thumbnail A auto-set)
-    print("[Main] Uploading to YouTube...")
-    thumb_a_path = thumbnail_paths[0]["path"] if thumbnail_paths else None
-
+    # Upload to YouTube
+    thumb_a = thumbnail_paths[0]["path"] if thumbnail_paths else None
     yt_result = upload_video(
         video_path=output_path,
         title=ab_titles[0] if ab_titles else video_title,
         description=metadata["description"],
         tags=metadata["tags"],
         channel=channel,
-        thumbnail_path=thumb_a_path
+        thumbnail_path=thumb_a
     )
+    print(f"[Main] Uploaded: {yt_result['video_id']}")
 
-    print(f"[Main] YouTube upload complete: {yt_result['video_id']}")
-
-    # Upload final video to Drive output/ folder as backup
+    # Upload final video to Drive
     upload_final_video(output_path, output_folder_id)
 
-    # Mark job complete (increments rotation counter)
-    complete_job(job_id, channel)
-
-    # Record video in memory system for performance tracking
+    # Record in memory
     try:
         from src.memory import record_produced_video
         record_produced_video(
@@ -479,10 +420,13 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
             title=video_title
         )
     except Exception as e:
-        print(f"[Main] Memory recording skipped: {e}")
-    ch_state = get_channel_state(channel)  # reload updated state
+        print(f"[Main] Memory record skipped: {e}")
 
-    # Send delivery email
+    # Mark complete
+    complete_job(job_id, channel)
+    ch_state = get_channel_state(channel)
+
+    # Delivery email
     send_delivery(
         channel=channel,
         rotation_name=ch_state["rotation_name"],
@@ -500,30 +444,34 @@ def stage4_assembly(channel: str, job_id: str, drive_folder_url: str):
             str((ch_state["current_rotation"] % len(ch_state["rotations"])) + 1)
         )
     )
-
-    print(f"\n[Main] Stage 4 complete.")
-    print(f"[Main] YouTube Studio: {yt_result['studio_url']}")
-    print(f"[Main] Delivery email sent to info@croki.store")
+    print(f"[Main] Stage 4 complete. Studio: {yt_result['studio_url']}")
 
 
-def _extract_video_id_from_url(url: str) -> str:
-    if "youtube.com/watch?v=" in url:
+# ─────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────
+
+def _extract_video_id(url: str) -> str:
+    if "watch?v=" in url:
         return url.split("v=")[1].split("&")[0]
     if "youtu.be/" in url:
         return url.split("youtu.be/")[1].split("?")[0]
     return url
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="YouTube Automation System")
-    parser.add_argument("--stage", type=int, required=True, choices=[1, 2, 3, 4])
-    parser.add_argument("--channel", required=True, choices=["AE", "GIA", "BF"])
-    parser.add_argument("--video-url",   default="")
-    parser.add_argument("--video-title", default="")
-    parser.add_argument("--job-id",      default="")
-    parser.add_argument("--action",      default="approve", choices=["approve", "regenerate"])
-    parser.add_argument("--drive-folder", default="")
+# ─────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stage",        type=int, required=True, choices=[1, 2, 3, 4])
+    parser.add_argument("--channel",      required=True, choices=["AE", "GIA", "BF"])
+    parser.add_argument("--video-url",    default="")
+    parser.add_argument("--video-title",  default="")
+    parser.add_argument("--job-id",       default="")
+    parser.add_argument("--action",       default="approve", choices=["approve", "regenerate"])
+    parser.add_argument("--drive-folder", default="")
     args = parser.parse_args()
 
     print(f"\n{'='*60}")

@@ -15,7 +15,7 @@ import requests
 from datetime import datetime
 from typing import Optional
 
-RESEND_API_KEY   = os.environ["RESEND_API_KEY"]
+RESEND_API_KEY   = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL") or "automation@croki.store"
 TO_EMAIL   = os.environ.get("RESEND_TO_EMAIL") or "info@croki.store" 
 RESEND_SEND_URL  = "https://api.resend.com/emails"
