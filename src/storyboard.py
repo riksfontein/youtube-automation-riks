@@ -17,64 +17,111 @@ from typing import Optional
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE    = "https://api.anthropic.com/v1"
 
+# Style constants derived from Google Flow / VEO3.1 Filmmaking Skill
+# Key findings applied:
+# - Audio instructions must be in FIRST HALF of every VEO3.1 prompt
+# - Every prompt must include "No subtitles. No text overlays."
+# - Official 5-part formula: [Cinematography]+[Subject]+[Action]+[Context]+[Style & Ambiance]
+# - Style modifiers that trigger cinematic quality in VEO3.1
+# - Audio direction: SFX prefix, quotation marks for dialogue, explicit music description
+
 CHANNEL_STYLES = {
     "AE": {
-        "visual_style":   "cinematic natural history documentary",
+        "visual_style":    "cinematic natural history documentary",
         "style_reference": "Netflix Prehistoric Planet / BBC Earth — deep saturated color, volumetric light, epic prehistoric scale",
-        "color_grade":    "Netflix/BBC Earth natural history grade — deep saturated blues, warm ambers, volumetric atmospheric light",
-        "camera_language": "slow dolly-in, ground-level tracking, orbital, rack focus, overhead reveal",
+        "color_grade":     "warm orange-teal grade, cinematic, 35mm lens look, film grain, shallow depth of field",
+        "camera_language": "slow dolly-in, ground-level tracking shot, orbital crane shot, rack focus pull, overhead reveal",
         "storyboard_type": "natural history documentary",
+        "audio_style":     "deep cinematic score, sub-bass rumble, ancient ocean ambient, prehistoric atmosphere",
+        "style_modifiers": "cinematic, 35mm lens look, film grain, shallow depth of field, warm orange-teal grade, volumetric light",
+        "safety_suffix":   "No subtitles. No text overlays.",
+        "veo_audio_prefix": "SFX: deep prehistoric ocean ambient, low sub-bass frequency, ancient water displacement.",
     },
     "GIA": {
-        "visual_style":   "premium geopolitical intelligence documentary",
-        "style_reference": "Narcos / Vice News — teal-orange grade, presence anchor, real specific locations",
-        "color_grade":    "Narcos/Vice News teal-orange grade — cold teal shadows, warm amber highlights, institutional interiors",
-        "camera_language": "slow push-in, handheld tracking, surveillance-style static, over-shoulder",
+        "visual_style":    "premium geopolitical intelligence documentary",
+        "style_reference": "Narcos / Vice News — warm orange-teal grade, presence anchor, real specific locations",
+        "color_grade":     "warm orange-teal grade, 35mm lens look, institutional interiors, cold teal shadows, warm amber highlights",
+        "camera_language": "slow push-in, handheld surveillance tracking, static locked-off, over-shoulder reveal",
         "storyboard_type": "intelligence documentary",
+        "audio_style":     "tense documentary score, institutional ambient, distant city traffic, surveillance atmosphere",
+        "style_modifiers": "cinematic, warm orange-teal grade, 35mm lens look, film grain, neon-lit for exterior scenes",
+        "safety_suffix":   "No subtitles. No text overlays.",
+        "veo_audio_prefix": "SFX: institutional ambient, low corridor hum, distant city murmur.",
     },
     "BF": {
-        "visual_style":   "biblical archaeology documentary",
-        "style_reference": "warm amber and deep shadow — ancient parchment warmth, institutional reverence",
-        "color_grade":    "warm amber documentary grade — deep honey and shadow, the visual warmth of ancient knowledge revealed",
-        "camera_language": "slow reveal, tilt-up, extreme close-up on ancient surfaces, low-angle reverence",
+        "visual_style":    "biblical archaeology documentary",
+        "style_reference": "warm amber and deep shadow — ancient parchment warmth, golden hour reverence",
+        "color_grade":     "golden hour warm amber grade, deep shadow contrast, 35mm lens look, film grain",
+        "camera_language": "slow tilt-up reveal, extreme close-up on ancient surfaces, low-angle reverence, slow pan across artifacts",
         "storyboard_type": "archaeological documentary",
+        "audio_style":     "ancient sacred atmosphere, desert wind, stone resonance, deep ceremonial tone",
+        "style_modifiers": "cinematic, golden hour, film grain, warm amber grade, 35mm lens look, shallow depth of field",
+        "safety_suffix":   "No subtitles. No text overlays.",
+        "veo_audio_prefix": "SFX: ancient desert wind, stone chamber resonance, sacred atmosphere.",
     }
 }
 
-# The storyboard skill system prompt — full skill content
-STORYBOARD_SKILL = """You are a professional storyboard and cinematic video prompt specialist.
+# The storyboard skill system prompt
+# Updated with Google Flow / VEO3.1 Filmmaking Skill best practices:
+# - Official 5-part VEO formula: [Cinematography]+[Subject]+[Action]+[Context]+[Style & Ambiance]
+# - Audio in FIRST HALF of VEO3.1 prompts (not at the end)
+# - Every VEO3.1 prompt ends with "No subtitles. No text overlays."
+# - Style modifiers: cinematic, 35mm lens look, film grain, warm orange-teal grade
+# - SFX prefix for sound effects, quotation marks for dialogue
+# - wet pavement for urban scenes, golden hour for warm scenes
+
+STORYBOARD_SKILL = """You are a professional storyboard and cinematic video prompt specialist
+trained on Google Flow / VEO3.1 best practices.
+
 You generate two-phase storyboard prompts from a script and channel style guidelines.
 
 PHASE 1 — STORYBOARD SHEET IMAGE PROMPT:
-A single prompt that generates a professional multi-panel storyboard sheet as one composite image,
+A single prompt generating a professional multi-panel storyboard sheet as one composite image
 with numbered panels, timecodes, shot descriptions, and scene metadata.
 Optimised for Nano Banana Pro and GPT Image 2.
 
 PHASE 2 — SCENE VIDEO PROMPTS:
-Per-scene cinematic video prompts following the storyboard's visual narrative.
-Three versions per scene: Meta AI, VEO3.1 (Google Flow), and Grok Aurora.
+Per-scene cinematic video prompts. Three versions: Meta AI, VEO3.1 (Google Flow), Grok Aurora.
 
 NARRATIVE ARC PRINCIPLES:
-- Three-act structure across all scenes: Setup (first 20%) → Rising action (60%) → Resolution (20%)
+- Three-act structure: Setup (first 20%) → Rising action (60%) → Resolution (20%)
 - Shot variety: never repeat same shot type in consecutive scenes
-- Emotional escalation: build intensity through the middle, peak at 70-80% through video
+- Emotional escalation: build intensity through middle, peak at 70-80%
 - Close-ups for emotional peaks, wide shots for context and breathing room
-- Character consistency: reference character-identifying details in each scene they appear
+- Character consistency: reference character-identifying details in every scene they appear
 
 META AI PROMPT RULES:
-- Motion verb first: action-oriented, 2-3 short sentences
-- No timestamp format. Better for fluid dynamics, water, creature movement
+- Motion verb FIRST: action-oriented, 2-3 short sentences maximum
+- No timestamp format. Best for fluid dynamics, water, creature movement, fire, smoke
+- Lead with what is MOVING in the scene
 
-VEO3.1 PROMPT RULES:
-- Structure: [Camera movement] [Subject] [Action] [Environment] [Lighting] [Style/Audio]
-- Timestamp format for most scenes: [00:00-00:05] first angle, [00:05-00:08] second angle
-- Max 8 seconds. Humans/creatures minimally animated — environment carries motion
-- Include audio direction at end
+VEO3.1 PROMPT RULES (CRITICAL — follow exactly):
+1. Official 5-part formula: [Cinematography] + [Subject] + [Action] + [Context] + [Style & Ambiance]
+2. Audio direction goes in the FIRST HALF of the prompt, before visual description
+   - SFX prefix for sound effects: "SFX: deep ocean ambient, low sub-bass frequency"
+   - Quotation marks for any dialogue: She says, "We need to leave now."
+   - Describe music explicitly: genre, tempo, instruments
+3. Timestamp format for two-beat scenes: [00:00-00:05] first angle, [00:05-00:08] second angle
+4. Single angle for environment-only and closing scenes (no timestamp needed)
+5. Max 8 seconds per clip. Humans/creatures minimally animated — environment carries motion
+6. High-impact style modifiers that trigger cinematic quality:
+   - "cinematic" — #1 quality trigger (professional lighting, color grading, composition)
+   - "35mm lens look" — classic cinematic aesthetic
+   - "film grain" — analog texture and depth
+   - "warm orange-teal grade" — premium cinematic color grade
+   - "shallow depth of field" — professional lens quality
+   - "golden hour" — warm flattering light
+   - "wet pavement" — dramatically improves urban/rain scenes
+7. ALWAYS end every VEO3.1 prompt with: "No subtitles. No text overlays."
+8. Do NOT use negative language ("no walls") — describe what IS there, not what isn't
+9. Keep prompts focused — VEO3.1 cannot follow too many simultaneous instructions
 
 GROK AURORA PROMPT RULES:
 - Structure: [Subject] [Action/Motion] [Camera Movement] [Visual Style] [Audio Direction]
-- Subject FIRST always. 6s for scenes ≤10 words, 10s for scenes 11-13 words
-- No timestamp format. Audio direction embedded naturally at end"""
+- Subject FIRST always (opposite of VEO3.1 which leads with camera)
+- 6s for scenes ≤10 words narration, 10s for scenes 11-13 words
+- No timestamp format. Audio direction embedded naturally at end of prompt
+- Good for scale reveals, atmospheric wide shots, creature motion"""
 
 
 def generate_storyboard_sheet_prompt(
