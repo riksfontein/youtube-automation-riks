@@ -55,7 +55,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN_GIA: ${{ secrets.YOUTUBE_REFRESH_TOKEN_GIA }}
           YOUTUBE_REFRESH_TOKEN_BF: ${{ secrets.YOUTUBE_REFRESH_TOKEN_BF }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GITHUB_REPO: ${{ github.repository }}
           CHANNEL: ${{ github.event.inputs.channel }}
           JOB_ID: ${{ github.event.inputs.job_id }}
@@ -68,7 +68,7 @@ jobs:
         continue-on-error: true
       - name: Commit and push changes
         env:
-          GH_PAT: ${{ secrets.GITHUB_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           git config user.email "automation@croki.store"
           git config user.name "YouTube Automation"

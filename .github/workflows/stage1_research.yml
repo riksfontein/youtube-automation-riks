@@ -75,7 +75,7 @@ jobs:
 
       - name: Commit and push changes
         env:
-          GH_PAT: ${{ secrets.GITHUB_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           git config user.email "automation@croki.store"
           git config user.name "YouTube Automation"
