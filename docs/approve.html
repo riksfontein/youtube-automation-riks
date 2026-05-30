@@ -69,8 +69,7 @@
     <div class="info-row"><span>Job ID</span><strong id="v-job">—</strong></div>
   </div>
 
-  <div class="token-section">
-    <div class="token-label">GitHub Personal Access Token (stored locally in your browser)</div>
+<div class="token-section" style="display:none">    <div class="token-label">GitHub Personal Access Token (stored locally in your browser)</div>
     <input type="password" class="token-input" id="pat-input"
            placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
            oninput="saveToken(this.value)">
@@ -88,6 +87,7 @@
 <script>
 const REPO = "riksfontein/youtube-automation-riks";
 const WORKFLOW = "stage2_script.yml";
+const HARDCODED_TOKEN = "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";
 
 function getParams() {
   const p = new URLSearchParams(window.location.search);
@@ -151,7 +151,7 @@ window.onload = function() {
 
 async function confirm() {
   const p     = getParams();
-  const token = document.getElementById("pat-input").value.trim() || loadToken();
+  const token = HARDCODED_TOKEN || document.getElementById("pat-input").value.trim() || loadToken();
 
   if (!token) {
     showStatus("Please enter your GitHub Personal Access Token first.", "error");
