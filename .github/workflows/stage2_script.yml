@@ -35,6 +35,173 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Write correct subscribr.py
+        run: |
+          cat > src/subscribr.py << 'PYEOF'
+          import os, sys, json, time, requests
+          from typing import Optional
+
+          SUBSCRIBR_BASE = "https://subscribr.ai/api/v1"
+          POLL_INTERVAL  = 12
+          MAX_POLLS      = 40
+
+          def _token():
+              return (os.environ.get("SUBSCRIBR_API_KEY") or
+                      os.environ.get("SUBSCRIBR_API_TOKEN") or "")
+
+          def _h():
+              return {"Authorization": f"Bearer {_token()}",
+                      "Content-Type": "application/json",
+                      "Accept": "application/json"}
+
+          def _get(path, params=None):
+              r = requests.get(f"{SUBSCRIBR_BASE}{path}", headers=_h(), params=params, timeout=30)
+              print(f"[Subscribr] GET {path} -> {r.status_code}")
+              return r.json() if r.status_code == 200 else {}
+
+          def _post(path, body=None):
+              r = requests.post(f"{SUBSCRIBR_BASE}{path}", headers=_h(), json=body or {}, timeout=60)
+              print(f"[Subscribr] POST {path} -> {r.status_code}")
+              if r.status_code in (200, 201, 202):
+                  try: return r.json()
+                  except: return {"status": r.status_code}
+              print(f"[Subscribr] Error: {r.text[:200]}")
+              return {}
+
+          def _u(r):
+              if "data" in r:
+                  d = r["data"]
+                  return d if d is not None else {}
+              return r
+
+          def _poll(script_id, run_id, label):
+              for i in range(MAX_POLLS):
+                  d = _u(_get(f"/scripts/{script_id}/generate/poll", {"run_id": run_id}))
+                  s = str(d.get("status") or "").lower()
+                  if s in ("completed","done","success","finished"):
+                      print(f"[Subscribr] {label} complete"); return
+                  if s in ("failed","error"):
+                      raise RuntimeError(f"[Subscribr] {label} failed")
+                  print(f"[Subscribr] {label}: {s or 'pending'} ({i+1})")
+                  time.sleep(POLL_INTERVAL)
+              raise TimeoutError(f"[Subscribr] {label} timed out")
+
+          def get_channel_ideas(channel_id):
+              r = _get(f"/channels/{channel_id}/ideas")
+              d = _u(r)
+              if isinstance(d, list): ideas = d
+              elif isinstance(d, dict): ideas = d.get("ideas") or d.get("data") or []
+              else: ideas = []
+              ideas = [i for i in ideas if isinstance(i, dict)]
+              print(f"[Subscribr] {len(ideas)} ideas in channel")
+              return ideas
+
+          def generate_ideas_from_video(channel_id, video_url):
+              print(f"[Subscribr] Requesting ideas from: {video_url}")
+              try:
+                  r = _post(f"/channels/{channel_id}/ideas/generate-from-video", {"video_url": video_url})
+                  if r:
+                      print("[Subscribr] Generation triggered - waiting 65s...")
+                      time.sleep(65)
+                      ideas = get_channel_ideas(channel_id)
+                      if ideas: return ideas
+              except Exception as e:
+                  print(f"[Subscribr] generate-from-video error: {e}")
+              print("[Subscribr] Using existing channel ideas")
+              return get_channel_ideas(channel_id)
+
+          def select_best_idea(ideas, rotation_name, competitor_title, channel_name):
+              if not ideas: return {}
+              api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+              ideas_text = "\n".join([f"{i+1}. {x.get('title','?')}" for i,x in enumerate(ideas[:10])])
+              try:
+                  resp = requests.post("https://api.anthropic.com/v1/messages",
+                      headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                      json={"model": "claude-haiku-4-5-20251001", "max_tokens": 64,
+                            "messages": [{"role": "user", "content": f'Best idea for "{rotation_name}" channel. Competitor: "{competitor_title}".\nIDEAS:\n{ideas_text}\nReturn ONLY JSON: {{"selected_index": <1-10>}}'}]},
+                      timeout=30)
+                  text = resp.json()["content"][0]["text"].strip()
+                  if "{" in text: text = text[text.index("{"):text.rindex("}")+1]
+                  idx = max(0, min(int(json.loads(text)["selected_index"]) - 1, len(ideas)-1))
+                  print(f"[Subscribr] Selected idea {idx+1}: {ideas[idx].get('title','?')}")
+                  return ideas[idx]
+              except Exception as e:
+                  print(f"[Subscribr] Idea selection error: {e} - using first")
+                  return ideas[0]
+
+          def write_idea(idea_id):
+              r = _post(f"/ideas/{idea_id}/write")
+              d = _u(r)
+              script_id = str(d.get("id") or d.get("script_id") or "")
+              if not script_id: raise RuntimeError(f"[Subscribr] No script_id: {r}")
+              print(f"[Subscribr] Script canvas: {script_id}"); return script_id
+
+          def generate_outline(script_id):
+              r = _post(f"/scripts/{script_id}/outline/generate")
+              d = _u(r); run_id = str(d.get("run_id") or d.get("id") or "")
+              if not run_id: raise RuntimeError(f"[Subscribr] No run_id outline: {r}")
+              _poll(script_id, run_id, "Outline")
+
+          def generate_script(script_id):
+              r = _post(f"/scripts/{script_id}/script/generate")
+              d = _u(r); run_id = str(d.get("run_id") or d.get("id") or "")
+              if not run_id: raise RuntimeError(f"[Subscribr] No run_id script: {r}")
+              _poll(script_id, run_id, "Script")
+
+          def humanize_script(script_id):
+              r = _post(f"/scripts/{script_id}/script/humanize")
+              d = _u(r); run_id = str(d.get("run_id") or d.get("id") or "")
+              if run_id: _poll(script_id, run_id, "Humanize")
+              else: print("[Subscribr] Humanize: no run_id - skipping")
+
+          def export_script(script_id):
+              for fmt in ["markdown", "text"]:
+                  r = _get(f"/scripts/{script_id}/export", {"format": fmt})
+                  d = _u(r)
+                  text = d.get("content") or d.get("script") or d.get("text") or d.get("markdown") or ""
+                  if not text: text = r.get("content") or r.get("script") or r.get("text") or ""
+                  if text:
+                      print(f"[Subscribr] Exported {len(text.split())} words"); return text
+              raise RuntimeError("[Subscribr] Export failed")
+
+          def generate_ab_titles(script_text, rotation_name, competitor_title, channel_name):
+              api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+              try:
+                  resp = requests.post("https://api.anthropic.com/v1/messages",
+                      headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                      json={"model": "claude-sonnet-4-20250514", "max_tokens": 256,
+                            "messages": [{"role": "user", "content": f"3 YouTube titles for {rotation_name} documentary. Channel: {channel_name}. Competitor: {competitor_title}.\nScript: {' '.join(script_text.split()[:250])}\nFormula 1: Comparison. Formula 2: Revelation. Formula 3: Contradiction.\n50-70 chars each. Return ONLY a JSON array of 3 strings."}]},
+                      timeout=30)
+                  text = resp.json()["content"][0]["text"].strip()
+                  if "[" in text: text = text[text.index("["):text.rindex("]")+1]
+                  return json.loads(text)[:3]
+              except Exception as e:
+                  print(f"[Subscribr] Titles error: {e}")
+                  return [competitor_title, f"Why {rotation_name} Is More Extreme Than You Think", f"The Truth About {rotation_name}"]
+
+          def generate_thumbnails(channel_id, idea_id, competitor_thumbnail_url=None):
+              return []
+
+          def full_script_pipeline(channel_id, rotation_name, channel_name, video_url, video_title):
+              print(f"\n[Subscribr] Pipeline: {channel_name} - {rotation_name}")
+              ideas = generate_ideas_from_video(channel_id, video_url)
+              if not ideas:
+                  raise RuntimeError("[Subscribr] No ideas found. Add ideas to your Subscribr channel at subscribr.ai then retry.")
+              best_idea = select_best_idea(ideas, rotation_name, video_title, channel_name)
+              idea_id = str(best_idea.get("id") or best_idea.get("idea_id") or "")
+              if not idea_id: raise RuntimeError(f"[Subscribr] No idea_id: {best_idea}")
+              script_id = write_idea(idea_id)
+              generate_outline(script_id)
+              generate_script(script_id)
+              humanize_script(script_id)
+              script_text = export_script(script_id)
+              ab_titles = generate_ab_titles(script_text, rotation_name, video_title, channel_name)
+              return {"script_id": script_id, "idea_id": idea_id, "idea": best_idea,
+                      "script_text": script_text, "ab_titles": ab_titles, "word_count": len(script_text.split())}
+          PYEOF
+          echo "subscribr.py written by workflow"
+          wc -l src/subscribr.py
+
       - name: Run Stage 2 Script Generation
         env:
           ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
@@ -85,5 +252,5 @@ jobs:
           fi
           git add state.json
           git add docs/ 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Automation update"
-          git push origin HEAD:main || echo "Push skipped (no PAT or nothing to push)"
+          git diff --staged --quiet || git commit -m "Stage 2: ${{ github.event.inputs.channel }} script generated"
+          git push origin HEAD:main || echo "Push skipped"
