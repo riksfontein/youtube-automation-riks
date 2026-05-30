@@ -199,7 +199,6 @@ jobs:
               return {"script_id": script_id, "idea_id": idea_id, "idea": best_idea,
                       "script_text": script_text, "ab_titles": ab_titles, "word_count": len(script_text.split())}
           PYEOF
-          sed -i 's/^          //' src/subscribr.py
           echo "subscribr.py written by workflow"
           wc -l src/subscribr.py
           python3 -c "exec(open('src/subscribr.py').read()); print('Syntax OK')" 
