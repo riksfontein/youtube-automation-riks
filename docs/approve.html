@@ -180,8 +180,8 @@ async function confirm() {
           ref: "main",
           inputs: {
             channel:              p.channel,
-            selected_video_url:   decodeURIComponent(p.video_url),
-            selected_video_title: decodeURIComponent(p.video_title),
+            selected_video_url:   p.video_url,
+            selected_video_title: p.video_title,
             job_id:               p.job_id
           }
         })
