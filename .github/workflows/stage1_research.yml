@@ -2,12 +2,12 @@ name: Stage 1 — Research & Competitor Selection
 
 on:
   schedule:
-    - cron: '0 6 * * 1'   # Monday   = AE
-    - cron: '0 6 * * 2'   # Tuesday  = GIA
-    - cron: '0 6 * * 3'   # Wednesday = BF
-    - cron: '0 6 * * 5'   # Friday   = AE
-    - cron: '0 6 * * 6'   # Saturday = GIA
-    - cron: '0 6 * * 0'   # Sunday   = BF
+    - cron: '0 6 * * 1'
+    - cron: '0 6 * * 2'
+    - cron: '0 6 * * 3'
+    - cron: '0 6 * * 5'
+    - cron: '0 6 * * 6'
+    - cron: '0 6 * * 0'
 
   workflow_dispatch:
     inputs:
@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          token: ${{ secrets.GITHUB_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,35 +54,32 @@ jobs:
 
       - name: Run Stage 1 Research
         env:
-          ANTHROPIC_API_KEY:       ${{ secrets.ANTHROPIC_API_KEY }}
-          ELEVENLABS_API_KEY:      ${{ secrets.ELEVENLABS_API_KEY }}
-          SUBSCRIBR_API_KEY:       ${{ secrets.SUBSCRIBR_API_KEY }}
-          VIDIQ_API_KEY:           ${{ secrets.VIDIQ_API_KEY }}
-          RESEND_API_KEY:          ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL:       ${{ secrets.RESEND_FROM_EMAIL }}
-          RESEND_TO_EMAIL:         ${{ secrets.RESEND_TO_EMAIL }}
-          YOUTUBE_CLIENT_ID:       ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET:   ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          ANTHROPIC_API_KEY:         ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY:        ${{ secrets.ELEVENLABS_API_KEY }}
+          SUBSCRIBR_API_KEY:         ${{ secrets.SUBSCRIBR_API_KEY }}
+          VIDIQ_API_KEY:             ${{ secrets.VIDIQ_API_KEY }}
+          RESEND_API_KEY:            ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL:         ${{ secrets.RESEND_FROM_EMAIL }}
+          RESEND_TO_EMAIL:           ${{ secrets.RESEND_TO_EMAIL }}
+          YOUTUBE_CLIENT_ID:         ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET:     ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN_AE:  ${{ secrets.YOUTUBE_REFRESH_TOKEN_AE }}
           YOUTUBE_REFRESH_TOKEN_GIA: ${{ secrets.YOUTUBE_REFRESH_TOKEN_GIA }}
           YOUTUBE_REFRESH_TOKEN_BF:  ${{ secrets.YOUTUBE_REFRESH_TOKEN_BF }}
-          GOOGLE_DRIVE_FOLDER_ID:  ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          GITHUB_REPO:             ${{ github.repository }}
-          CHANNEL:                 ${{ steps.channel.outputs.channel }}
+          GOOGLE_DRIVE_FOLDER_ID:    ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GITHUB_REPO:               ${{ github.repository }}
+          CHANNEL:                   ${{ steps.channel.outputs.channel }}
         run: python src/main.py --stage 1 --channel $CHANNEL
-
 
       - name: Generate dashboard
         run: python src/generate_dashboard.py
         continue-on-error: true
-      - name: Commit state updates
-        env:
-          GH_PAT: ${{ secrets.GITHUB_PAT }}
+
+      - name: Commit and push state
         run: |
           git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
-          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git
           git add state.json
-          git add docs/index.html 2>/dev/null || true
+          git add docs/ 2>/dev/null || true
           git diff --staged --quiet || git commit -m "Stage 1: ${{ steps.channel.outputs.channel }} research complete"
-          git push origin HEAD:main
+          git push

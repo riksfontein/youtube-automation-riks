@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          token: ${{ secrets.GITHUB_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,13 +77,10 @@ jobs:
         continue-on-error: true
 
       - name: Commit state updates
-        env:
-          GH_PAT: ${{ secrets.GITHUB_PAT }}
         run: |
           git config --global user.email "automation@croki.store"
           git config --global user.name "YouTube Automation"
-          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git
           git add state.json
-          git add docs/index.html 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "Stage 2: ${{ github.event.inputs.channel }} script generated"
-          git push origin HEAD:main
+          git add docs/ 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Stage complete: ${{ github.event.inputs.channel }}"
+          git push
